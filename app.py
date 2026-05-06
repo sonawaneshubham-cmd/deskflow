@@ -14,6 +14,12 @@ db = SQLAlchemy(app)
 login_manager = LoginManager(app)
 login_manager.login_view = 'login'
 
+# ─── Secondary SPOC association table ─────────────────────────────────────────
+ticket_spocs = db.Table('ticket_spocs',
+    db.Column('ticket_id', db.Integer, db.ForeignKey('ticket.id')),
+    db.Column('user_id',   db.Integer, db.ForeignKey('user.id'))
+)
+
 # ─── Models ────────────────────────────────────────────────────────────────────
 
 class Team(db.Model):
@@ -49,6 +55,7 @@ class Ticket(db.Model):
     user_id     = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
     assigned_to = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=True)
     category_id = db.Column(db.Integer, db.ForeignKey('category.id'), nullable=True)
+    spocs       = db.relationship('User', secondary=ticket_spocs, backref='spoc_tickets', lazy=True)
 
     @property
     def is_overdue(self):
@@ -124,19 +131,18 @@ def dashboard():
     else:
         all_tickets = Ticket.query.filter(
             (Ticket.user_id == current_user.id) |
-            (Ticket.assigned_to == current_user.id)
+            (Ticket.assigned_to == current_user.id) |
+            (Ticket.spocs.any(User.id == current_user.id))
         ).order_by(Ticket.created_at.desc()).all()
 
     stats = {
         'open':        sum(1 for t in all_tickets if t.status == 'open'),
-        'in_progress': sum(1 for t in all_tickets if t.status == 'in_progress'),
         'closed':      sum(1 for t in all_tickets if t.status == 'closed'),
         'overdue':     sum(1 for t in all_tickets if t.is_overdue),
     }
     return render_template('dashboard.html',
-        open_tickets       =[t for t in all_tickets if t.status == 'open'],
-        inprogress_tickets =[t for t in all_tickets if t.status == 'in_progress'],
-        closed_tickets     =[t for t in all_tickets if t.status == 'closed'],
+        open_tickets      =[t for t in all_tickets if t.status == 'open'],
+        closed_tickets    =[t for t in all_tickets if t.status == 'closed'],
         stats=stats
     )
 
@@ -150,6 +156,12 @@ def update_status():
     db.session.commit()
     return jsonify({'success': True})
 
+@login_required
+    data   = request.get_json()
+    ticket = Ticket.query.get_or_404(data['ticket_id'])
+    ticket.updated_at = datetime.utcnow()
+    db.session.commit()
+
 # ─── Tickets ───────────────────────────────────────────────────────────────────
 
 @app.route('/ticket/new', methods=['GET', 'POST'])
@@ -158,20 +170,22 @@ def new_ticket():
     users      = User.query.order_by(User.name).all()
     categories = Category.query.order_by(Category.name).all()
     if request.method == 'POST':
-        assigned = request.form.get('assigned_to')
-        cat      = request.form.get('category_id')
-        start    = request.form.get('start_date')
-        due      = request.form.get('due_date')
-        ticket   = Ticket(
+        assigned  = request.form.get('assigned_to')
+        cat       = request.form.get('category_id')
+        start     = request.form.get('start_date')
+        due       = request.form.get('due_date')
+        spoc_ids  = request.form.getlist('spocs')
+        ticket    = Ticket(
             title       = request.form['title'].strip(),
             description = request.form['description'].strip(),
             priority    = request.form['priority'],
             user_id     = current_user.id,
             assigned_to = int(assigned) if assigned else None,
-            category_id = int(cat) if cat else None,
+            category_id = int(cat)      if cat      else None,
             start_date  = datetime.strptime(start, '%Y-%m-%d').date() if start else None,
             due_date    = datetime.strptime(due,   '%Y-%m-%d').date() if due   else None,
         )
+        ticket.spocs = [User.query.get(int(i)) for i in spoc_ids if i]
         db.session.add(ticket)
         db.session.commit()
         flash('Ticket submitted!', 'success')
@@ -184,10 +198,14 @@ def view_ticket(ticket_id):
     ticket     = Ticket.query.get_or_404(ticket_id)
     users      = User.query.order_by(User.name).all()
     categories = Category.query.order_by(Category.name).all()
-    if not current_user.is_admin and ticket.user_id != current_user.id and ticket.assigned_to != current_user.id:
+    spoc_ids   = [u.id for u in ticket.spocs]
+    is_spoc    = current_user.id in spoc_ids
+    if not current_user.is_admin and ticket.user_id != current_user.id \
+       and ticket.assigned_to != current_user.id and not is_spoc:
         flash('Access denied.', 'error')
         return redirect(url_for('dashboard'))
-    return render_template('view_ticket.html', ticket=ticket, users=users, categories=categories)
+    return render_template('view_ticket.html', ticket=ticket, users=users,
+                           categories=categories, spoc_ids=spoc_ids)
 
 @app.route('/ticket/<int:ticket_id>/update', methods=['POST'])
 @login_required
@@ -197,12 +215,14 @@ def update_ticket(ticket_id):
     cat        = request.form.get('category_id')
     start      = request.form.get('start_date')
     due        = request.form.get('due_date')
+    spoc_ids   = request.form.getlist('spocs')
     ticket.status      = request.form['status']
     ticket.priority    = request.form['priority']
     ticket.assigned_to = int(assigned) if assigned else None
     ticket.category_id = int(cat)      if cat      else None
     ticket.start_date  = datetime.strptime(start, '%Y-%m-%d').date() if start else None
     ticket.due_date    = datetime.strptime(due,   '%Y-%m-%d').date() if due   else None
+    ticket.spocs       = [User.query.get(int(i)) for i in spoc_ids if i]
     ticket.updated_at  = datetime.utcnow()
     db.session.commit()
     flash('Ticket updated.', 'success')
