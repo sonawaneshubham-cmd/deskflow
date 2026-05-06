@@ -62,6 +62,7 @@ class Ticket(db.Model):
     user_id     = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
     assigned_to = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=True)
     category_id = db.Column(db.Integer, db.ForeignKey('category.id'), nullable=True)
+    reference_url = db.Column(db.String(500), nullable=True)
     spocs       = db.relationship('User', secondary=ticket_spocs, backref='spoc_tickets', lazy=True)
     comments    = db.relationship('Comment', backref='ticket', lazy=True, cascade='all, delete-orphan')
 
@@ -274,7 +275,8 @@ def new_ticket():
             assigned_to = int(assigned) if assigned else None,
             category_id = int(cat)      if cat      else None,
             start_date  = datetime.strptime(start, '%Y-%m-%d').date() if start else None,
-            due_date    = datetime.strptime(due,   '%Y-%m-%d').date() if due   else None,
+            due_date      = datetime.strptime(due,   '%Y-%m-%d').date() if due   else None,
+            reference_url = request.form.get('reference_url','').strip() or None,
         )
         ticket.spocs = [User.query.get(int(i)) for i in spoc_ids if i]
         db.session.add(ticket)
@@ -319,6 +321,7 @@ def update_ticket(ticket_id):
     ticket.assigned_to = int(assigned) if assigned else None
     ticket.category_id = int(cat)      if cat      else None
     ticket.start_date  = datetime.strptime(start, '%Y-%m-%d').date() if start else None
+    ticket.reference_url = request.form.get('reference_url','').strip() or None
     ticket.due_date    = datetime.strptime(due,   '%Y-%m-%d').date() if due   else None
     ticket.spocs       = [User.query.get(int(i)) for i in spoc_ids if i]
     ticket.updated_at  = datetime.utcnow()
