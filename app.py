@@ -50,6 +50,9 @@ def register():
         name     = request.form['name'].strip()
         email    = request.form['email'].strip().lower()
         password = request.form['password']
+        if not email.endswith('@unacademy.com'):
+            flash('Only @unacademy.com email addresses are allowed.', 'error')
+            return redirect(url_for('register'))
         if User.query.filter_by(email=email).first():
             flash('Email already registered.', 'error')
             return redirect(url_for('register'))
