@@ -20,6 +20,7 @@
   .tc-title{font-size:0.88rem;font-weight:500;margin-bottom:0.4rem}
   .tc-meta{font-size:0.72rem;color:var(--text-dim);font-family:var(--mono);display:flex;flex-wrap:wrap;gap:0.5rem;margin-top:0.5rem}
   .tc-due-ok{color:var(--green)} .tc-due-warn{color:var(--amber)} .tc-due-over{color:var(--red)}
+  .no-drag{cursor:pointer;opacity:0.85}
   .active-filter{background:var(--accent);color:#fff;border-color:var(--accent)}
 </style>
 {% endblock %}
@@ -83,8 +84,11 @@
        ondrop="drop(event,this)">
     <div class="col-header">{{ col_label }}<span class="col-count">{{ col_tickets|length }}</span></div>
     {% for ticket in col_tickets %}
-    <div class="ticket-card" draggable="true" data-id="{{ ticket.id }}"
-         ondragstart="drag(event)"
+    {% set can_drag = current_user.is_admin or ticket.assigned_to == current_user.id %}
+    <div class="ticket-card {% if not can_drag %}no-drag{% endif %}"
+         draggable="{{ 'true' if can_drag else 'false' }}"
+         data-id="{{ ticket.id }}"
+         ondragstart="{% if can_drag %}drag(event){% endif %}"
          onclick="location.href='{{ url_for('view_ticket', ticket_id=ticket.id) }}'">
       <div class="tc-title">#{{ ticket.id }} {{ ticket.title }}</div>
       <div style="display:flex;gap:0.4rem;flex-wrap:wrap;margin-top:0.35rem">
