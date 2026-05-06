@@ -6,12 +6,10 @@
   <title>DeskFlow {% block title %}{% endblock %}</title>
   <link rel="preconnect" href="https://fonts.googleapis.com"/>
   <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@300;400;500&display=swap" rel="stylesheet"/>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css"/>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/themes/dark.css"/>
   <style>
-    :root {
-      --bg:#0d0f12; --surface:#161a1f; --border:#252b33; --muted:#3a424d;
-      --text:#c8d0da; --text-dim:#606878; --accent:#3b82f6; --green:#22c55e;
-      --amber:#f59e0b; --red:#ef4444; --mono:'IBM Plex Mono',monospace; --sans:'IBM Plex Sans',sans-serif;
-    }
+    :root{--bg:#0d0f12;--surface:#161a1f;--border:#252b33;--muted:#3a424d;--text:#c8d0da;--text-dim:#606878;--accent:#3b82f6;--green:#22c55e;--amber:#f59e0b;--red:#ef4444;--mono:'IBM Plex Mono',monospace;--sans:'IBM Plex Sans',sans-serif}
     *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
     body{background:var(--bg);color:var(--text);font-family:var(--sans);font-size:15px;line-height:1.6;min-height:100vh}
     a{color:var(--accent);text-decoration:none} a:hover{text-decoration:underline}
@@ -37,6 +35,8 @@
     input,textarea,select{width:100%;background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:0.6rem 0.85rem;color:var(--text);font-family:var(--sans);font-size:0.9rem;transition:border-color 0.15s}
     input:focus,textarea:focus,select:focus{outline:none;border-color:var(--accent)}
     textarea{resize:vertical;min-height:110px} select option{background:var(--surface)}
+    select[multiple]{height:auto;min-height:100px}
+    select[multiple] option{padding:0.3rem 0.5rem}
     .badge{display:inline-block;padding:0.2rem 0.6rem;border-radius:4px;font-size:0.72rem;font-family:var(--mono);font-weight:500;text-transform:uppercase;letter-spacing:0.05em}
     .badge-open{background:#0c2a4a;color:#60a5fa}
     .badge-in_progress{background:#2d1f00;color:var(--amber)}
@@ -53,6 +53,15 @@
     .auth-sub{color:var(--text-dim);font-size:0.875rem;margin-bottom:1.75rem}
     .empty{text-align:center;padding:3rem 2rem;color:var(--text-dim)}
     .grid-2{display:grid;grid-template-columns:1fr 1fr;gap:1rem}
+    .grid-3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:1rem}
+    /* Progress slider */
+    .progress-wrap{position:relative}
+    .progress-track{height:8px;background:var(--border);border-radius:99px;overflow:hidden;margin-top:0.5rem}
+    .progress-fill{height:100%;border-radius:99px;transition:width 0.3s;background:var(--accent)}
+    input[type=range]{width:100%;accent-color:var(--accent);cursor:pointer}
+    /* Flatpickr overrides */
+    .flatpickr-calendar{background:var(--surface)!important;border:1px solid var(--border)!important}
+    .flatpickr-day.selected{background:var(--accent)!important;border-color:var(--accent)!important}
   </style>
   {% block head %}{% endblock %}
 </head>
@@ -68,7 +77,7 @@
   </div>
   <div class="nav-user">
     {% if current_user.team %}{{ current_user.team.name }} · {% endif %}{{ current_user.name }}
-    &nbsp;·&nbsp; <a href="{{ url_for('logout') }}" style="color:var(--text-dim)">logout</a>
+    &nbsp;·&nbsp;<a href="{{ url_for('logout') }}" style="color:var(--text-dim)">logout</a>
   </div>
 </nav>
 {% endif %}
@@ -78,5 +87,17 @@
   {% endwith %}
   {% block content %}{% endblock %}
 </div>
+<script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+<script>
+  document.addEventListener('DOMContentLoaded', function(){
+    flatpickr('.datepicker', {
+      dateFormat: 'Y-m-d',
+      altInput: true,
+      altFormat: 'd M Y',
+      theme: 'dark'
+    });
+  });
+</script>
+{% block scripts %}{% endblock %}
 </body>
 </html>
