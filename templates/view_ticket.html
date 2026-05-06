@@ -56,6 +56,25 @@
     {% endif %}
   </div>
 
+  <!-- Quick status update — anyone with access -->
+  <div class="card" style="margin-bottom:1.25rem">
+    <div style="font-family:var(--mono);font-size:0.75rem;text-transform:uppercase;letter-spacing:0.08em;color:var(--text-dim);margin-bottom:0.75rem">Update status</div>
+    <div style="display:flex;gap:0.6rem;flex-wrap:wrap">
+      <form method="POST" action="{{ url_for('quick_status', ticket_id=ticket.id) }}">
+        <input type="hidden" name="status" value="open"/>
+        <button type="submit" class="btn btn-sm {% if ticket.status == 'open' %}btn-primary{% else %}btn-ghost{% endif %}">Open</button>
+      </form>
+      <form method="POST" action="{{ url_for('quick_status', ticket_id=ticket.id) }}">
+        <input type="hidden" name="status" value="in_progress"/>
+        <button type="submit" class="btn btn-sm {% if ticket.status == 'in_progress' %}btn-primary{% else %}btn-ghost{% endif %}">In Progress</button>
+      </form>
+      <form method="POST" action="{{ url_for('quick_status', ticket_id=ticket.id) }}">
+        <input type="hidden" name="status" value="closed"/>
+        <button type="submit" class="btn btn-sm {% if ticket.status == 'closed' %}btn-primary{% else %}btn-ghost{% endif %}">Closed</button>
+      </form>
+    </div>
+  </div>
+
   <!-- Edit (only creator or admin) -->
   {% if can_edit %}
   <div class="card" style="margin-bottom:1.25rem">
