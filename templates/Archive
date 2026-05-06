@@ -1,0 +1,74 @@
+{% extends "base.html" %}
+{% block title %}— Archive{% endblock %}
+{% block head %}
+<style>
+  .archive-row{display:grid;grid-template-columns:2fr 1fr 1fr 1fr 1fr;align-items:center;gap:1rem;background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:0.9rem 1.1rem;margin-bottom:0.6rem;transition:border-color 0.15s}
+  .archive-row:hover{border-color:var(--muted)}
+  .filters{display:flex;gap:0.6rem;margin-bottom:1.5rem;flex-wrap:wrap}
+  .filters input,.filters select{width:auto;padding:0.4rem 0.7rem;font-size:0.82rem;flex:1;min-width:120px}
+</style>
+{% endblock %}
+{% block content %}
+<div class="page-header">
+  <div class="page-title">Closed tickets archive</div>
+  <a href="{{ url_for('dashboard') }}" class="btn btn-ghost btn-sm">← Board</a>
+</div>
+
+<form method="GET" action="{{ url_for('archive') }}">
+  <div class="filters">
+    <input type="text" name="q" value="{{ q }}" placeholder="Search..."/>
+    <select name="category">
+      <option value="">All categories</option>
+      {% for cat in categories %}
+      <option value="{{ cat.id }}" {% if f_category==cat.id|string %}selected{% endif %}>{{ cat.name }}</option>
+      {% endfor %}
+    </select>
+    <select name="team">
+      <option value="">All teams</option>
+      {% for team in teams %}
+      <option value="{{ team.id }}" {% if f_team==team.id|string %}selected{% endif %}>{{ team.name }}</option>
+      {% endfor %}
+    </select>
+    <input type="date" name="from_date" value="{{ from_date }}" placeholder="From date"/>
+    <input type="date" name="to_date" value="{{ to_date }}" placeholder="To date"/>
+    <button type="submit" class="btn btn-ghost btn-sm">Filter</button>
+    {% if q or f_category or f_team or from_date or to_date %}
+    <a href="{{ url_for('archive') }}" class="btn btn-ghost btn-sm">Clear</a>
+    {% endif %}
+  </div>
+</form>
+
+<div style="display:grid;grid-template-columns:2fr 1fr 1fr 1fr 1fr;gap:1rem;padding:0 1.1rem;margin-bottom:0.5rem">
+  <div style="font-size:0.72rem;color:var(--text-dim);font-family:var(--mono);text-transform:uppercase;letter-spacing:0.06em">Ticket</div>
+  <div style="font-size:0.72rem;color:var(--text-dim);font-family:var(--mono);text-transform:uppercase;letter-spacing:0.06em">Category</div>
+  <div style="font-size:0.72rem;color:var(--text-dim);font-family:var(--mono);text-transform:uppercase;letter-spacing:0.06em">Assignee</div>
+  <div style="font-size:0.72rem;color:var(--text-dim);font-family:var(--mono);text-transform:uppercase;letter-spacing:0.06em">Closed on</div>
+  <div style="font-size:0.72rem;color:var(--text-dim);font-family:var(--mono);text-transform:uppercase;letter-spacing:0.06em">Priority</div>
+</div>
+
+{% if tickets %}
+  {% for ticket in tickets %}
+  <a href="{{ url_for('view_ticket', ticket_id=ticket.id) }}" style="text-decoration:none">
+    <div class="archive-row">
+      <div>
+        <div style="font-weight:500;font-size:0.9rem">#{{ ticket.id }} {{ ticket.title }}</div>
+        <div style="font-size:0.75rem;color:var(--text-dim);font-family:var(--mono);margin-top:0.15rem">by {{ ticket.author.name }}{% if ticket.assignee.team %} · {{ ticket.assignee.team.name }}{% endif %}</div>
+      </div>
+      <div style="font-size:0.85rem">{{ ticket.category.name if ticket.category else '—' }}</div>
+      <div style="font-size:0.85rem">{{ ticket.assignee.name if ticket.assignee else '—' }}</div>
+      <div style="font-size:0.85rem;font-family:var(--mono)">{{ ticket.updated_at.strftime('%d %b %Y') }}</div>
+      <span class="badge badge-{{ ticket.priority }}">{{ ticket.priority }}</span>
+    </div>
+  </a>
+  {% endfor %}
+{% else %}
+  <div class="empty">
+    <div style="font-size:2rem;margin-bottom:0.75rem">📁</div>
+    <p>No closed tickets yet.</p>
+  </div>
+{% endif %}
+
+<div style="margin-top:1rem;font-size:0.82rem;color:var(--text-dim);text-align:right;font-family:var(--mono)">
+  {{ tickets|length }} ticket{{ 's' if tickets|length != 1 else '' }} found
+</div>
+{% endblock %}
