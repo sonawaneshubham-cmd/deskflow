@@ -7,7 +7,7 @@ import os
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'dev-secret-key-change-in-production'
-app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///deskflow.db'
+app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('DATABASE_URL', 'sqlite:///deskflow.db')
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
 db = SQLAlchemy(app)
@@ -137,11 +137,13 @@ def dashboard():
 
     stats = {
         'open':        sum(1 for t in all_tickets if t.status == 'open'),
+        'in_progress': sum(1 for t in all_tickets if t.status == 'in_progress'),
         'closed':      sum(1 for t in all_tickets if t.status == 'closed'),
         'overdue':     sum(1 for t in all_tickets if t.is_overdue),
     }
     return render_template('dashboard.html',
         open_tickets      =[t for t in all_tickets if t.status == 'open'],
+        inprogress_tickets=[t for t in all_tickets if t.status == 'in_progress'],
         closed_tickets    =[t for t in all_tickets if t.status == 'closed'],
         stats=stats
     )
@@ -155,12 +157,6 @@ def update_status():
     ticket.updated_at = datetime.utcnow()
     db.session.commit()
     return jsonify({'success': True})
-
-@login_required
-    data   = request.get_json()
-    ticket = Ticket.query.get_or_404(data['ticket_id'])
-    ticket.updated_at = datetime.utcnow()
-    db.session.commit()
 
 # ─── Tickets ───────────────────────────────────────────────────────────────────
 
