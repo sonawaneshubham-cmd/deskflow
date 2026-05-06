@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+{% block title %}— Admin{% endblock %}
+{% block content %}
+<div class="page-header">
+  <div class="page-title">Admin Panel</div>
+  <a href="{{ url_for('dashboard') }}" class="btn btn-ghost btn-sm">← Board</a>
+</div>
+
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:1.5rem;align-items:start">
+
+  <!-- Categories -->
+  <div class="card">
+    <div style="font-family:var(--mono);font-size:0.8rem;text-transform:uppercase;letter-spacing:0.08em;color:var(--text-dim);margin-bottom:1rem">Task Categories</div>
+    <form method="POST" action="{{ url_for('new_category') }}" style="display:flex;gap:0.5rem;margin-bottom:1rem">
+      <input type="text" name="name" placeholder="New category name" style="flex:1"/>
+      <button type="submit" class="btn btn-primary btn-sm">Add</button>
+    </form>
+    {% for cat in categories %}
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:0.6rem 0.75rem;background:var(--bg);border:1px solid var(--border);border-radius:6px;margin-bottom:0.4rem">
+      <span style="font-size:0.88rem">{{ cat.name }}</span>
+      <form method="POST" action="{{ url_for('delete_category', cat_id=cat.id) }}">
+        <button type="submit" class="btn btn-danger btn-sm" onclick="return confirm('Delete {{ cat.name }}?')">Delete</button>
+      </form>
+    </div>
+    {% else %}
+    <div style="color:var(--text-dim);font-size:0.85rem">No categories yet.</div>
+    {% endfor %}
+  </div>
+
+  <!-- Team assignments -->
+  <div class="card">
+    <div style="font-family:var(--mono);font-size:0.8rem;text-transform:uppercase;letter-spacing:0.08em;color:var(--text-dim);margin-bottom:1rem">User Teams</div>
+    {% for user in users %}
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:0.6rem 0.75rem;background:var(--bg);border:1px solid var(--border);border-radius:6px;margin-bottom:0.4rem">
+      <div>
+        <div style="font-size:0.88rem;font-weight:500">{{ user.name }}</div>
+        <div style="font-size:0.72rem;color:var(--text-dim);font-family:var(--mono)">{{ user.email }}</div>
+      </div>
+      <form method="POST" action="{{ url_for('assign_team', user_id=user.id) }}" style="display:flex;gap:0.4rem;align-items:center">
+        <select name="team_id" style="width:160px;padding:0.35rem 0.6rem;font-size:0.8rem">
+          <option value="">— No team —</option>
+          {% for team in teams %}
+          <option value="{{ team.id }}" {% if user.team_id == team.id %}selected{% endif %}>{{ team.name }}</option>
+          {% endfor %}
+        </select>
+        <button type="submit" class="btn btn-ghost btn-sm">Save</button>
+      </form>
+    </div>
+    {% endfor %}
+  </div>
+
+</div>
+{% endblock %}

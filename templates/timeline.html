@@ -1,0 +1,63 @@
+{% extends "base.html" %}
+{% block title %}— Timeline{% endblock %}
+{% block head %}
+<style>
+  .timeline-row{display:grid;grid-template-columns:2fr 1fr 1fr 1fr 120px;align-items:center;gap:1rem;background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:0.9rem 1.1rem;margin-bottom:0.6rem;transition:border-color 0.15s}
+  .timeline-row:hover{border-color:var(--muted)}
+  .tl-title{font-weight:500;font-size:0.9rem}
+  .tl-meta{font-size:0.75rem;color:var(--text-dim);margin-top:0.15rem;font-family:var(--mono)}
+  .progress-bar{height:6px;background:var(--border);border-radius:99px;overflow:hidden;margin-top:0.4rem}
+  .progress-fill{height:100%;border-radius:99px;transition:width 0.3s}
+</style>
+{% endblock %}
+{% block content %}
+<div class="page-header">
+  <div class="page-title">Timeline</div>
+  <a href="{{ url_for('new_ticket') }}" class="btn btn-primary btn-sm">+ New ticket</a>
+</div>
+
+{% if tickets %}
+<div style="display:grid;grid-template-columns:2fr 1fr 1fr 1fr 120px;gap:1rem;padding:0 1.1rem;margin-bottom:0.5rem">
+  <div style="font-size:0.72rem;color:var(--text-dim);font-family:var(--mono);text-transform:uppercase;letter-spacing:0.06em">Ticket</div>
+  <div style="font-size:0.72rem;color:var(--text-dim);font-family:var(--mono);text-transform:uppercase;letter-spacing:0.06em">Assigned</div>
+  <div style="font-size:0.72rem;color:var(--text-dim);font-family:var(--mono);text-transform:uppercase;letter-spacing:0.06em">Start</div>
+  <div style="font-size:0.72rem;color:var(--text-dim);font-family:var(--mono);text-transform:uppercase;letter-spacing:0.06em">Due</div>
+  <div style="font-size:0.72rem;color:var(--text-dim);font-family:var(--mono);text-transform:uppercase;letter-spacing:0.06em">Status</div>
+</div>
+
+{% for ticket in tickets %}
+{% set d = ticket.days_until_due %}
+<a href="{{ url_for('view_ticket', ticket_id=ticket.id) }}" style="text-decoration:none">
+  <div class="timeline-row" style="{% if ticket.is_overdue %}border-color:#7f1d1d{% endif %}">
+    <div>
+      <div class="tl-title">#{{ ticket.id }} {{ ticket.title }}</div>
+      <div class="tl-meta">
+        {% if ticket.category %}{{ ticket.category.name }} · {% endif %}
+        <span class="badge badge-{{ ticket.priority }}" style="padding:0.1rem 0.4rem">{{ ticket.priority }}</span>
+      </div>
+      {% if ticket.start_date and ticket.due_date %}
+        {% set total = (ticket.due_date - ticket.start_date).days %}
+        {% set elapsed = (ticket.due_date - ticket.start_date).days - (d if d else 0) %}
+        {% set pct = [[(elapsed / total * 100) if total > 0 else 0, 0]|max, 100]|min %}
+        <div class="progress-bar"><div class="progress-fill" style="width:{{ pct }}%;background:{% if ticket.is_overdue %}var(--red){% elif pct > 75 %}var(--amber){% else %}var(--accent){% endif %}"></div></div>
+      {% endif %}
+    </div>
+    <div style="font-size:0.85rem">{{ ticket.assignee.name if ticket.assignee else '—' }}</div>
+    <div style="font-size:0.85rem;font-family:var(--mono)">{{ ticket.start_date.strftime('%d %b') if ticket.start_date else '—' }}</div>
+    <div style="font-size:0.85rem;font-family:var(--mono);{% if ticket.is_overdue %}color:var(--red){% elif d is not none and d <= 2 %}color:var(--amber){% endif %}">
+      {{ ticket.due_date.strftime('%d %b') if ticket.due_date else '—' }}
+      {% if d is not none %}
+        <div style="font-size:0.7rem;color:inherit">{% if ticket.is_overdue %}{{ d|abs }}d overdue{% elif d == 0 %}today{% else %}{{ d }}d left{% endif %}</div>
+      {% endif %}
+    </div>
+    <span class="badge badge-{{ ticket.status }}">{{ ticket.status.replace('_',' ') }}</span>
+  </div>
+</a>
+{% endfor %}
+{% else %}
+<div class="empty">
+  <div style="font-size:2rem;margin-bottom:0.75rem">📅</div>
+  <p>No tickets with due dates yet. <a href="{{ url_for('new_ticket') }}">Create one.</a></p>
+</div>
+{% endif %}
+{% endblock %}

@@ -1,52 +1,89 @@
 {% extends "base.html" %}
-{% block title %}— Dashboard{% endblock %}
+{% block title %}— Board{% endblock %}
+{% block head %}
+<style>
+  .stats{display:grid;grid-template-columns:repeat(4,1fr);gap:1rem;margin-bottom:2rem}
+  .stat-card{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:1.25rem 1.5rem}
+  .stat-num{font-family:var(--mono);font-size:2rem;font-weight:500;line-height:1}
+  .stat-label{font-size:0.75rem;color:var(--text-dim);text-transform:uppercase;letter-spacing:0.08em;margin-top:0.3rem}
+  .kanban{display:grid;grid-template-columns:repeat(3,1fr);gap:1.25rem;align-items:start}
+  .col-header{font-family:var(--mono);font-size:0.8rem;text-transform:uppercase;letter-spacing:0.08em;color:var(--text-dim);margin-bottom:0.75rem;display:flex;align-items:center;justify-content:space-between}
+  .col-count{background:var(--muted);color:var(--text);border-radius:99px;padding:0.1rem 0.5rem;font-size:0.7rem}
+  .kanban-col{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:1rem;min-height:200px}
+  .ticket-card{background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:0.85rem 1rem;margin-bottom:0.6rem;cursor:grab;transition:border-color 0.15s,box-shadow 0.15s}
+  .ticket-card:hover{border-color:var(--muted);box-shadow:0 2px 8px rgba(0,0,0,0.3)}
+  .ticket-card.dragging{opacity:0.4;cursor:grabbing}
+  .kanban-col.drag-over{border-color:var(--accent);background:#0d1b2e}
+  .tc-title{font-size:0.88rem;font-weight:500;margin-bottom:0.4rem}
+  .tc-meta{font-size:0.72rem;color:var(--text-dim);font-family:var(--mono);display:flex;flex-wrap:wrap;gap:0.5rem;margin-top:0.5rem}
+  .tc-due-ok{color:var(--green)} .tc-due-warn{color:var(--amber)} .tc-due-over{color:var(--red)}
+</style>
+{% endblock %}
 {% block content %}
-
 <div class="stats">
-  <div class="stat-card">
-    <div class="stat-num" style="color:#60a5fa">{{ stats.open }}</div>
-    <div class="stat-label">Open</div>
-  </div>
-  <div class="stat-card">
-    <div class="stat-num" style="color:var(--amber)">{{ stats.in_progress }}</div>
-    <div class="stat-label">In progress</div>
-  </div>
-  <div class="stat-card">
-    <div class="stat-num" style="color:var(--green)">{{ stats.closed }}</div>
-    <div class="stat-label">Closed</div>
-  </div>
+  <div class="stat-card"><div class="stat-num" style="color:#60a5fa">{{ stats.open }}</div><div class="stat-label">Open</div></div>
+  <div class="stat-card"><div class="stat-num" style="color:var(--amber)">{{ stats.in_progress }}</div><div class="stat-label">In Progress</div></div>
+  <div class="stat-card"><div class="stat-num" style="color:var(--green)">{{ stats.closed }}</div><div class="stat-label">Closed</div></div>
+  <div class="stat-card"><div class="stat-num" style="color:var(--red)">{{ stats.overdue }}</div><div class="stat-label">Overdue</div></div>
 </div>
 
 <div class="page-header">
-  <div class="page-title">
-    {% if current_user.is_admin %}All tickets{% else %}My tickets{% endif %}
-  </div>
+  <div class="page-title">Kanban Board</div>
   <a href="{{ url_for('new_ticket') }}" class="btn btn-primary btn-sm">+ New ticket</a>
 </div>
 
-{% if tickets %}
-<div class="ticket-list">
-  {% for ticket in tickets %}
-  <a href="{{ url_for('view_ticket', ticket_id=ticket.id) }}" style="text-decoration:none">
-    <div class="ticket-row">
-      <div>
-        <div class="ticket-title">#{{ ticket.id }} — {{ ticket.title }}</div>
-        <div class="ticket-meta">
-          by {{ ticket.author.name }} · {{ ticket.created_at.strftime('%d %b %Y') }}
-        </div>
+<div class="kanban">
+  {% for col_status, col_label, col_tickets in [
+      ('open','Open', open_tickets),
+      ('in_progress','In Progress', inprogress_tickets),
+      ('closed','Closed', closed_tickets)
+  ] %}
+  <div class="kanban-col" data-status="{{ col_status }}"
+       ondragover="event.preventDefault();this.classList.add('drag-over')"
+       ondragleave="this.classList.remove('drag-over')"
+       ondrop="drop(event,this)">
+    <div class="col-header">{{ col_label }}<span class="col-count">{{ col_tickets|length }}</span></div>
+    {% for ticket in col_tickets %}
+    <div class="ticket-card" draggable="true"
+         data-id="{{ ticket.id }}"
+         ondragstart="drag(event)"
+         onclick="location.href='{{ url_for('view_ticket', ticket_id=ticket.id) }}'">
+      <div class="tc-title">#{{ ticket.id }} {{ ticket.title }}</div>
+      <div style="display:flex;gap:0.4rem;flex-wrap:wrap;margin-top:0.35rem">
+        <span class="badge badge-{{ ticket.priority }}">{{ ticket.priority }}</span>
+        {% if ticket.category %}<span class="badge" style="background:#1a1f2e;color:#94a3b8">{{ ticket.category.name }}</span>{% endif %}
+        {% if ticket.is_overdue %}<span class="badge badge-overdue">overdue</span>{% endif %}
       </div>
-      <span class="badge badge-{{ ticket.priority }}">{{ ticket.priority }}</span>
-      <span class="badge badge-{{ ticket.status }}">{{ ticket.status.replace('_',' ') }}</span>
-      <span style="color:var(--text-dim);font-size:0.85rem">→</span>
+      <div class="tc-meta">
+        {% if ticket.assignee %}<span>→ {{ ticket.assignee.name }}</span>{% endif %}
+        {% if ticket.due_date %}
+          {% set d = ticket.days_until_due %}
+          <span class="{% if ticket.is_overdue %}tc-due-over{% elif d <= 2 %}tc-due-warn{% else %}tc-due-ok{% endif %}">
+            due {{ ticket.due_date.strftime('%d %b') }}
+          </span>
+        {% endif %}
+      </div>
     </div>
-  </a>
+    {% else %}
+    <div class="empty" style="padding:2rem 1rem;font-size:0.8rem">No tickets</div>
+    {% endfor %}
+  </div>
   {% endfor %}
 </div>
-{% else %}
-<div class="empty">
-  <div class="empty-icon">📭</div>
-  <p>No tickets yet. <a href="{{ url_for('new_ticket') }}">Submit the first one.</a></p>
-</div>
-{% endif %}
 
+<script>
+let dragged = null;
+function drag(e){ dragged = e.currentTarget; e.currentTarget.classList.add('dragging'); }
+document.addEventListener('dragend', e => { if(dragged) dragged.classList.remove('dragging'); });
+function drop(e, col){
+  e.preventDefault(); col.classList.remove('drag-over');
+  if(!dragged) return;
+  const status = col.dataset.status;
+  const id     = dragged.dataset.id;
+  fetch('/ticket/update_status', {
+    method:'POST', headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({ticket_id: parseInt(id), status: status})
+  }).then(()=>location.reload());
+}
+</script>
 {% endblock %}
