@@ -1,0 +1,296 @@
+from flask import Flask, render_template, request, redirect, url_for, flash, jsonify
+from flask_sqlalchemy import SQLAlchemy
+from flask_login import LoginManager, UserMixin, login_user, logout_user, login_required, current_user
+from werkzeug.security import generate_password_hash, check_password_hash
+from datetime import datetime, date
+import os
+
+app = Flask(__name__)
+app.config['SECRET_KEY'] = 'dev-secret-key-change-in-production'
+app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('DATABASE_URL', 'sqlite:///deskflow.db')
+app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+
+db = SQLAlchemy(app)
+login_manager = LoginManager(app)
+login_manager.login_view = 'login'
+
+# ─── Secondary SPOC association table ─────────────────────────────────────────
+ticket_spocs = db.Table('ticket_spocs',
+    db.Column('ticket_id', db.Integer, db.ForeignKey('ticket.id')),
+    db.Column('user_id',   db.Integer, db.ForeignKey('user.id'))
+)
+
+# ─── Models ────────────────────────────────────────────────────────────────────
+
+class Team(db.Model):
+    id      = db.Column(db.Integer, primary_key=True)
+    name    = db.Column(db.String(100), unique=True, nullable=False)
+    members = db.relationship('User', backref='team', lazy=True)
+
+class Category(db.Model):
+    id      = db.Column(db.Integer, primary_key=True)
+    name    = db.Column(db.String(100), unique=True, nullable=False)
+    tickets = db.relationship('Ticket', backref='category', lazy=True)
+
+class User(UserMixin, db.Model):
+    id       = db.Column(db.Integer, primary_key=True)
+    name     = db.Column(db.String(100), nullable=False)
+    email    = db.Column(db.String(150), unique=True, nullable=False)
+    password = db.Column(db.String(200), nullable=False)
+    is_admin = db.Column(db.Boolean, default=False)
+    team_id  = db.Column(db.Integer, db.ForeignKey('team.id'), nullable=True)
+    tickets_created  = db.relationship('Ticket', foreign_keys='Ticket.user_id', backref='author', lazy=True)
+    tickets_assigned = db.relationship('Ticket', foreign_keys='Ticket.assigned_to', backref='assignee', lazy=True)
+
+class Ticket(db.Model):
+    id          = db.Column(db.Integer, primary_key=True)
+    title       = db.Column(db.String(200), nullable=False)
+    description = db.Column(db.Text, nullable=False)
+    priority    = db.Column(db.String(20), default='medium')
+    status      = db.Column(db.String(20), default='open')
+    start_date  = db.Column(db.Date, nullable=True)
+    due_date    = db.Column(db.Date, nullable=True)
+    created_at  = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at  = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    user_id     = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    assigned_to = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=True)
+    category_id = db.Column(db.Integer, db.ForeignKey('category.id'), nullable=True)
+    spocs       = db.relationship('User', secondary=ticket_spocs, backref='spoc_tickets', lazy=True)
+
+    @property
+    def is_overdue(self):
+        if self.due_date and self.status != 'closed':
+            return date.today() > self.due_date
+        return False
+
+    @property
+    def days_until_due(self):
+        if self.due_date:
+            return (self.due_date - date.today()).days
+        return None
+
+@login_manager.user_loader
+def load_user(user_id):
+    return User.query.get(int(user_id))
+
+# ─── Auth ──────────────────────────────────────────────────────────────────────
+
+@app.route('/')
+def index():
+    return redirect(url_for('dashboard') if current_user.is_authenticated else 'login')
+
+@app.route('/register', methods=['GET', 'POST'])
+def register():
+    if request.method == 'POST':
+        name     = request.form['name'].strip()
+        email    = request.form['email'].strip().lower()
+        password = request.form['password']
+        if not email.endswith('@unacademy.com'):
+            flash('Only @unacademy.com email addresses are allowed.', 'error')
+            return redirect(url_for('register'))
+        if User.query.filter_by(email=email).first():
+            flash('Email already registered.', 'error')
+            return redirect(url_for('register'))
+        user = User(
+            name=name, email=email,
+            password=generate_password_hash(password),
+            is_admin=(User.query.count() == 0)
+        )
+        db.session.add(user)
+        db.session.commit()
+        login_user(user)
+        flash(f'Welcome, {name}! {"You are the admin." if user.is_admin else ""}', 'success')
+        return redirect(url_for('dashboard'))
+    return render_template('register.html')
+
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+    if request.method == 'POST':
+        email    = request.form['email'].strip().lower()
+        password = request.form['password']
+        user     = User.query.filter_by(email=email).first()
+        if user and check_password_hash(user.password, password):
+            login_user(user)
+            return redirect(url_for('dashboard'))
+        flash('Invalid email or password.', 'error')
+    return render_template('login.html')
+
+@app.route('/logout')
+@login_required
+def logout():
+    logout_user()
+    return redirect(url_for('login'))
+
+# ─── Dashboard (Kanban) ────────────────────────────────────────────────────────
+
+@app.route('/dashboard')
+@login_required
+def dashboard():
+    if current_user.is_admin:
+        all_tickets = Ticket.query.order_by(Ticket.created_at.desc()).all()
+    else:
+        all_tickets = Ticket.query.filter(
+            (Ticket.user_id == current_user.id) |
+            (Ticket.assigned_to == current_user.id) |
+            (Ticket.spocs.any(User.id == current_user.id))
+        ).order_by(Ticket.created_at.desc()).all()
+
+    stats = {
+        'open':        sum(1 for t in all_tickets if t.status == 'open'),
+        'in_progress': sum(1 for t in all_tickets if t.status == 'in_progress'),
+        'closed':      sum(1 for t in all_tickets if t.status == 'closed'),
+        'overdue':     sum(1 for t in all_tickets if t.is_overdue),
+    }
+    return render_template('dashboard.html',
+        open_tickets      =[t for t in all_tickets if t.status == 'open'],
+        inprogress_tickets=[t for t in all_tickets if t.status == 'in_progress'],
+        closed_tickets    =[t for t in all_tickets if t.status == 'closed'],
+        stats=stats
+    )
+
+@app.route('/ticket/update_status', methods=['POST'])
+@login_required
+def update_status():
+    data   = request.get_json()
+    ticket = Ticket.query.get_or_404(data['ticket_id'])
+    ticket.status     = data['status']
+    ticket.updated_at = datetime.utcnow()
+    db.session.commit()
+    return jsonify({'success': True})
+
+# ─── Tickets ───────────────────────────────────────────────────────────────────
+
+@app.route('/ticket/new', methods=['GET', 'POST'])
+@login_required
+def new_ticket():
+    users      = User.query.order_by(User.name).all()
+    categories = Category.query.order_by(Category.name).all()
+    if request.method == 'POST':
+        assigned  = request.form.get('assigned_to')
+        cat       = request.form.get('category_id')
+        start     = request.form.get('start_date')
+        due       = request.form.get('due_date')
+        spoc_ids  = request.form.getlist('spocs')
+        ticket    = Ticket(
+            title       = request.form['title'].strip(),
+            description = request.form['description'].strip(),
+            priority    = request.form['priority'],
+            user_id     = current_user.id,
+            assigned_to = int(assigned) if assigned else None,
+            category_id = int(cat)      if cat      else None,
+            start_date  = datetime.strptime(start, '%Y-%m-%d').date() if start else None,
+            due_date    = datetime.strptime(due,   '%Y-%m-%d').date() if due   else None,
+        )
+        ticket.spocs = [User.query.get(int(i)) for i in spoc_ids if i]
+        db.session.add(ticket)
+        db.session.commit()
+        flash('Ticket submitted!', 'success')
+        return redirect(url_for('dashboard'))
+    return render_template('new_ticket.html', users=users, categories=categories)
+
+@app.route('/ticket/<int:ticket_id>')
+@login_required
+def view_ticket(ticket_id):
+    ticket     = Ticket.query.get_or_404(ticket_id)
+    users      = User.query.order_by(User.name).all()
+    categories = Category.query.order_by(Category.name).all()
+    spoc_ids   = [u.id for u in ticket.spocs]
+    is_spoc    = current_user.id in spoc_ids
+    if not current_user.is_admin and ticket.user_id != current_user.id \
+       and ticket.assigned_to != current_user.id and not is_spoc:
+        flash('Access denied.', 'error')
+        return redirect(url_for('dashboard'))
+    return render_template('view_ticket.html', ticket=ticket, users=users,
+                           categories=categories, spoc_ids=spoc_ids)
+
+@app.route('/ticket/<int:ticket_id>/update', methods=['POST'])
+@login_required
+def update_ticket(ticket_id):
+    ticket     = Ticket.query.get_or_404(ticket_id)
+    assigned   = request.form.get('assigned_to')
+    cat        = request.form.get('category_id')
+    start      = request.form.get('start_date')
+    due        = request.form.get('due_date')
+    spoc_ids   = request.form.getlist('spocs')
+    ticket.status      = request.form['status']
+    ticket.priority    = request.form['priority']
+    ticket.assigned_to = int(assigned) if assigned else None
+    ticket.category_id = int(cat)      if cat      else None
+    ticket.start_date  = datetime.strptime(start, '%Y-%m-%d').date() if start else None
+    ticket.due_date    = datetime.strptime(due,   '%Y-%m-%d').date() if due   else None
+    ticket.spocs       = [User.query.get(int(i)) for i in spoc_ids if i]
+    ticket.updated_at  = datetime.utcnow()
+    db.session.commit()
+    flash('Ticket updated.', 'success')
+    return redirect(url_for('view_ticket', ticket_id=ticket_id))
+
+# ─── Timeline ──────────────────────────────────────────────────────────────────
+
+@app.route('/timeline')
+@login_required
+def timeline():
+    if current_user.is_admin:
+        tickets = Ticket.query.filter(Ticket.due_date != None).order_by(Ticket.due_date).all()
+    else:
+        tickets = Ticket.query.filter(
+            (Ticket.user_id == current_user.id) | (Ticket.assigned_to == current_user.id),
+            Ticket.due_date != None
+        ).order_by(Ticket.due_date).all()
+    return render_template('timeline.html', tickets=tickets)
+
+# ─── Admin Panel ───────────────────────────────────────────────────────────────
+
+@app.route('/admin')
+@login_required
+def admin_panel():
+    if not current_user.is_admin:
+        flash('Admin only.', 'error')
+        return redirect(url_for('dashboard'))
+    return render_template('admin.html',
+        categories = Category.query.order_by(Category.name).all(),
+        teams      = Team.query.order_by(Team.name).all(),
+        users      = User.query.order_by(User.name).all(),
+    )
+
+@app.route('/admin/category/new', methods=['POST'])
+@login_required
+def new_category():
+    if not current_user.is_admin: return redirect(url_for('dashboard'))
+    name = request.form['name'].strip()
+    if name and not Category.query.filter_by(name=name).first():
+        db.session.add(Category(name=name))
+        db.session.commit()
+        flash(f'Category "{name}" created.', 'success')
+    return redirect(url_for('admin_panel'))
+
+@app.route('/admin/category/<int:cat_id>/delete', methods=['POST'])
+@login_required
+def delete_category(cat_id):
+    if not current_user.is_admin: return redirect(url_for('dashboard'))
+    cat = Category.query.get_or_404(cat_id)
+    db.session.delete(cat)
+    db.session.commit()
+    flash('Category deleted.', 'success')
+    return redirect(url_for('admin_panel'))
+
+@app.route('/admin/user/<int:user_id>/team', methods=['POST'])
+@login_required
+def assign_team(user_id):
+    if not current_user.is_admin: return redirect(url_for('dashboard'))
+    user         = User.query.get_or_404(user_id)
+    team_id      = request.form.get('team_id')
+    user.team_id = int(team_id) if team_id else None
+    db.session.commit()
+    flash(f'{user.name} assigned to team.', 'success')
+    return redirect(url_for('admin_panel'))
+
+# ─── Init ──────────────────────────────────────────────────────────────────────
+
+if __name__ == '__main__':
+    with app.app_context():
+        db.create_all()
+        for tname in ['Business Ops', 'Academic Operations', 'Growth']:
+            if not Team.query.filter_by(name=tname).first():
+                db.session.add(Team(name=tname))
+        db.session.commit()
+    app.run(host='0.0.0.0', port=10000, debug=False)
