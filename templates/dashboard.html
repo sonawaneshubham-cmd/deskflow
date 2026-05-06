@@ -34,7 +34,11 @@
 
 <div class="page-header">
   <div class="page-title">Kanban Board</div>
-  <a href="{{ url_for('new_ticket') }}" class="btn btn-primary btn-sm">+ New ticket</a>
+  <div style="display:flex;gap:0.6rem;align-items:center">
+    <a href="{{ url_for('archive') }}" class="btn btn-ghost btn-sm">📁 Archive</a>
+    <button onclick="toggleClosed()" id="closed-btn" class="btn btn-ghost btn-sm">Show closed</button>
+    <a href="{{ url_for('new_ticket') }}" class="btn btn-primary btn-sm">+ New ticket</a>
+  </div>
 </div>
 
 <!-- Search & Filter -->
@@ -115,6 +119,16 @@
 </div>
 
 <script>
+function toggleClosed(){
+  const col = document.getElementById('closed-col');
+  const btn = document.getElementById('closed-btn');
+  const hidden = col.style.display === 'none';
+  col.style.display = hidden ? 'block' : 'none';
+  btn.textContent = hidden ? 'Hide closed' : 'Show closed';
+}
+document.addEventListener('DOMContentLoaded', function(){
+  document.getElementById('closed-col').style.display = 'none';
+});
 let dragged = null;
 function drag(e){ dragged=e.currentTarget; e.currentTarget.classList.add('dragging'); }
 document.addEventListener('dragend',e=>{if(dragged)dragged.classList.remove('dragging');});
