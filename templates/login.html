@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+{% block title %}— Login{% endblock %}
+{% block content %}
+<div class="auth-card">
+  <div class="auth-title">deskflow</div>
+  <div class="auth-sub">Sign in to your workspace</div>
+  <div class="card">
+    <form method="POST">
+      <div class="form-group">
+        <label>Email</label>
+        <input type="email" name="email" required autofocus placeholder="you@company.com"/>
+      </div>
+      <div class="form-group">
+        <label>Password</label>
+        <input type="password" name="password" required placeholder="••••••••"/>
+      </div>
+      <button type="submit" class="btn btn-primary" style="width:100%;justify-content:center;margin-top:0.5rem">Sign in</button>
+    </form>
+  </div>
+  <p style="text-align:center;margin-top:1rem;font-size:0.85rem;color:var(--text-dim)">
+    No account? <a href="{{ url_for('register') }}">Register here</a>
+  </p>
+</div>
+{% endblock %}

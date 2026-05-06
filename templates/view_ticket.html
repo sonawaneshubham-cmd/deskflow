@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+{% block title %}— Ticket #{{ ticket.id }}{% endblock %}
+{% block content %}
+<div style="max-width:680px">
+  <div class="page-header">
+    <div class="page-title">Ticket #{{ ticket.id }}</div>
+    <a href="{{ url_for('dashboard') }}" class="btn btn-ghost btn-sm">← Dashboard</a>
+  </div>
+
+  <div class="card" style="margin-bottom:1.25rem">
+    <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:1rem">
+      <h2 style="font-size:1.05rem;font-weight:500">{{ ticket.title }}</h2>
+      <div style="display:flex;gap:0.5rem">
+        <span class="badge badge-{{ ticket.priority }}">{{ ticket.priority }}</span>
+        <span class="badge badge-{{ ticket.status }}">{{ ticket.status.replace('_',' ') }}</span>
+      </div>
+    </div>
+    <p style="color:var(--text);line-height:1.7;white-space:pre-wrap">{{ ticket.description }}</p>
+    <div style="margin-top:1.25rem;padding-top:1rem;border-top:1px solid var(--border);font-size:0.78rem;color:var(--text-dim);font-family:var(--mono);display:flex;gap:2rem">
+      <span>By {{ ticket.author.name }}</span>
+      <span>Created {{ ticket.created_at.strftime('%d %b %Y, %H:%M') }}</span>
+      <span>Updated {{ ticket.updated_at.strftime('%d %b %Y, %H:%M') }}</span>
+    </div>
+  </div>
+
+  {% if current_user.is_admin %}
+  <div class="card">
+    <div style="font-family:var(--mono);font-size:0.75rem;text-transform:uppercase;letter-spacing:0.08em;color:var(--text-dim);margin-bottom:1rem">Admin controls</div>
+    <form method="POST" action="{{ url_for('update_ticket', ticket_id=ticket.id) }}" style="display:flex;gap:1rem;align-items:flex-end">
+      <div class="form-group" style="margin-bottom:0;flex:1">
+        <label>Status</label>
+        <select name="status">
+          <option value="open"        {% if ticket.status=='open' %}selected{% endif %}>Open</option>
+          <option value="in_progress" {% if ticket.status=='in_progress' %}selected{% endif %}>In progress</option>
+          <option value="closed"      {% if ticket.status=='closed' %}selected{% endif %}>Closed</option>
+        </select>
+      </div>
+      <div class="form-group" style="margin-bottom:0;flex:1">
+        <label>Priority</label>
+        <select name="priority">
+          <option value="low"    {% if ticket.priority=='low' %}selected{% endif %}>Low</option>
+          <option value="medium" {% if ticket.priority=='medium' %}selected{% endif %}>Medium</option>
+          <option value="high"   {% if ticket.priority=='high' %}selected{% endif %}>High</option>
+        </select>
+      </div>
+      <button type="submit" class="btn btn-primary">Update</button>
+    </form>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

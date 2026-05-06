@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+{% block title %}— Dashboard{% endblock %}
+{% block content %}
+
+<div class="stats">
+  <div class="stat-card">
+    <div class="stat-num" style="color:#60a5fa">{{ stats.open }}</div>
+    <div class="stat-label">Open</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-num" style="color:var(--amber)">{{ stats.in_progress }}</div>
+    <div class="stat-label">In progress</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-num" style="color:var(--green)">{{ stats.closed }}</div>
+    <div class="stat-label">Closed</div>
+  </div>
+</div>
+
+<div class="page-header">
+  <div class="page-title">
+    {% if current_user.is_admin %}All tickets{% else %}My tickets{% endif %}
+  </div>
+  <a href="{{ url_for('new_ticket') }}" class="btn btn-primary btn-sm">+ New ticket</a>
+</div>
+
+{% if tickets %}
+<div class="ticket-list">
+  {% for ticket in tickets %}
+  <a href="{{ url_for('view_ticket', ticket_id=ticket.id) }}" style="text-decoration:none">
+    <div class="ticket-row">
+      <div>
+        <div class="ticket-title">#{{ ticket.id }} — {{ ticket.title }}</div>
+        <div class="ticket-meta">
+          by {{ ticket.author.name }} · {{ ticket.created_at.strftime('%d %b %Y') }}
+        </div>
+      </div>
+      <span class="badge badge-{{ ticket.priority }}">{{ ticket.priority }}</span>
+      <span class="badge badge-{{ ticket.status }}">{{ ticket.status.replace('_',' ') }}</span>
+      <span style="color:var(--text-dim);font-size:0.85rem">→</span>
+    </div>
+  </a>
+  {% endfor %}
+</div>
+{% else %}
+<div class="empty">
+  <div class="empty-icon">📭</div>
+  <p>No tickets yet. <a href="{{ url_for('new_ticket') }}">Submit the first one.</a></p>
+</div>
+{% endif %}
+
+{% endblock %}
