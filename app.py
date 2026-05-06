@@ -4,11 +4,17 @@ from flask_login import LoginManager, UserMixin, login_user, logout_user, login_
 from werkzeug.security import generate_password_hash, check_password_hash
 from datetime import datetime, date
 import os
+import smtplib
+from email.mime.text import MIMEText
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'dev-secret-key-change-in-production'
 app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('DATABASE_URL', 'sqlite:///deskflow.db')
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+
+# Email config — set these in Render environment variables
+MAIL_USER = os.environ.get('MAIL_USER', '')
+MAIL_PASS = os.environ.get('MAIL_PASS', '')
 
 db = SQLAlchemy(app)
 login_manager = LoginManager(app)
@@ -41,6 +47,7 @@ class User(UserMixin, db.Model):
     team_id  = db.Column(db.Integer, db.ForeignKey('team.id'), nullable=True)
     tickets_created  = db.relationship('Ticket', foreign_keys='Ticket.user_id', backref='author', lazy=True)
     tickets_assigned = db.relationship('Ticket', foreign_keys='Ticket.assigned_to', backref='assignee', lazy=True)
+    comments         = db.relationship('Comment', backref='commenter', lazy=True)
 
 class Ticket(db.Model):
     id          = db.Column(db.Integer, primary_key=True)
@@ -56,6 +63,7 @@ class Ticket(db.Model):
     assigned_to = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=True)
     category_id = db.Column(db.Integer, db.ForeignKey('category.id'), nullable=True)
     spocs       = db.relationship('User', secondary=ticket_spocs, backref='spoc_tickets', lazy=True)
+    comments    = db.relationship('Comment', backref='ticket', lazy=True, cascade='all, delete-orphan')
 
     @property
     def is_overdue(self):
@@ -69,9 +77,67 @@ class Ticket(db.Model):
             return (self.due_date - date.today()).days
         return None
 
+    def can_edit(self, user):
+        return user.is_admin or self.user_id == user.id
+
+class Comment(db.Model):
+    id         = db.Column(db.Integer, primary_key=True)
+    body       = db.Column(db.Text, nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    ticket_id  = db.Column(db.Integer, db.ForeignKey('ticket.id'), nullable=False)
+    user_id    = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+
 @login_manager.user_loader
 def load_user(user_id):
     return User.query.get(int(user_id))
+
+# ─── Email helper ──────────────────────────────────────────────────────────────
+
+def send_email(to, subject, body):
+    if not MAIL_USER or not MAIL_PASS:
+        return
+    try:
+        msg = MIMEText(body, 'html')
+        msg['Subject'] = subject
+        msg['From']    = MAIL_USER
+        msg['To']      = to
+        with smtplib.SMTP_SSL('smtp.gmail.com', 465) as s:
+            s.login(MAIL_USER, MAIL_PASS)
+            s.send_message(msg)
+    except Exception as e:
+        print(f'Email error: {e}')
+
+def notify_assignment(ticket):
+    if not ticket.assignee:
+        return
+    send_email(
+        to      = ticket.assignee.email,
+        subject = f'[DeskFlow] Ticket assigned to you: #{ticket.id} {ticket.title}',
+        body    = f'''
+        <p>Hi {ticket.assignee.name},</p>
+        <p>A ticket has been assigned to you:</p>
+        <p><b>#{ticket.id} — {ticket.title}</b></p>
+        <p>Priority: {ticket.priority} | Status: {ticket.status}</p>
+        <p>By: {ticket.author.name}</p>
+        <p><a href="https://deskflow-rmwt.onrender.com/ticket/{ticket.id}">View ticket →</a></p>
+        '''
+    )
+
+def notify_status_change(ticket, old_status):
+    recipients = set()
+    if ticket.author:    recipients.add(ticket.author.email)
+    if ticket.assignee:  recipients.add(ticket.assignee.email)
+    for spoc in ticket.spocs: recipients.add(spoc.email)
+    for email in recipients:
+        send_email(
+            to      = email,
+            subject = f'[DeskFlow] Ticket #{ticket.id} updated: {old_status} → {ticket.status}',
+            body    = f'''
+            <p>Ticket <b>#{ticket.id} — {ticket.title}</b> status changed from
+            <b>{old_status}</b> to <b>{ticket.status}</b>.</p>
+            <p><a href="https://deskflow-rmwt.onrender.com/ticket/{ticket.id}">View ticket →</a></p>
+            '''
+        )
 
 # ─── Auth ──────────────────────────────────────────────────────────────────────
 
@@ -126,14 +192,34 @@ def logout():
 @app.route('/dashboard')
 @login_required
 def dashboard():
+    # Search & filter params
+    q          = request.args.get('q', '').strip()
+    f_status   = request.args.get('status', '')
+    f_priority = request.args.get('priority', '')
+    f_category = request.args.get('category', '')
+    f_team     = request.args.get('team', '')
+
     if current_user.is_admin:
-        all_tickets = Ticket.query.order_by(Ticket.created_at.desc()).all()
+        query = Ticket.query
     else:
-        all_tickets = Ticket.query.filter(
+        query = Ticket.query.filter(
             (Ticket.user_id == current_user.id) |
             (Ticket.assigned_to == current_user.id) |
             (Ticket.spocs.any(User.id == current_user.id))
-        ).order_by(Ticket.created_at.desc()).all()
+        )
+
+    if q:
+        query = query.filter(Ticket.title.ilike(f'%{q}%') | Ticket.description.ilike(f'%{q}%'))
+    if f_status:
+        query = query.filter(Ticket.status == f_status)
+    if f_priority:
+        query = query.filter(Ticket.priority == f_priority)
+    if f_category:
+        query = query.filter(Ticket.category_id == int(f_category))
+    if f_team:
+        query = query.join(User, Ticket.assigned_to == User.id).filter(User.team_id == int(f_team))
+
+    all_tickets = query.order_by(Ticket.created_at.desc()).all()
 
     stats = {
         'open':        sum(1 for t in all_tickets if t.status == 'open'),
@@ -141,21 +227,30 @@ def dashboard():
         'closed':      sum(1 for t in all_tickets if t.status == 'closed'),
         'overdue':     sum(1 for t in all_tickets if t.is_overdue),
     }
+
+    categories = Category.query.order_by(Category.name).all()
+    teams      = Team.query.order_by(Team.name).all()
+
     return render_template('dashboard.html',
         open_tickets      =[t for t in all_tickets if t.status == 'open'],
         inprogress_tickets=[t for t in all_tickets if t.status == 'in_progress'],
         closed_tickets    =[t for t in all_tickets if t.status == 'closed'],
-        stats=stats
+        stats=stats, categories=categories, teams=teams,
+        q=q, f_status=f_status, f_priority=f_priority,
+        f_category=f_category, f_team=f_team
     )
 
 @app.route('/ticket/update_status', methods=['POST'])
 @login_required
 def update_status():
-    data   = request.get_json()
-    ticket = Ticket.query.get_or_404(data['ticket_id'])
+    data       = request.get_json()
+    ticket     = Ticket.query.get_or_404(data['ticket_id'])
+    old_status = ticket.status
     ticket.status     = data['status']
     ticket.updated_at = datetime.utcnow()
     db.session.commit()
+    if old_status != ticket.status:
+        notify_status_change(ticket, old_status)
     return jsonify({'success': True})
 
 # ─── Tickets ───────────────────────────────────────────────────────────────────
@@ -184,6 +279,7 @@ def new_ticket():
         ticket.spocs = [User.query.get(int(i)) for i in spoc_ids if i]
         db.session.add(ticket)
         db.session.commit()
+        notify_assignment(ticket)
         flash('Ticket submitted!', 'success')
         return redirect(url_for('dashboard'))
     return render_template('new_ticket.html', users=users, categories=categories)
@@ -196,17 +292,23 @@ def view_ticket(ticket_id):
     categories = Category.query.order_by(Category.name).all()
     spoc_ids   = [u.id for u in ticket.spocs]
     is_spoc    = current_user.id in spoc_ids
+    can_edit   = ticket.can_edit(current_user)
     if not current_user.is_admin and ticket.user_id != current_user.id \
        and ticket.assigned_to != current_user.id and not is_spoc:
         flash('Access denied.', 'error')
         return redirect(url_for('dashboard'))
     return render_template('view_ticket.html', ticket=ticket, users=users,
-                           categories=categories, spoc_ids=spoc_ids)
+                           categories=categories, spoc_ids=spoc_ids, can_edit=can_edit)
 
 @app.route('/ticket/<int:ticket_id>/update', methods=['POST'])
 @login_required
 def update_ticket(ticket_id):
-    ticket     = Ticket.query.get_or_404(ticket_id)
+    ticket = Ticket.query.get_or_404(ticket_id)
+    if not ticket.can_edit(current_user):
+        flash('Only the ticket creator or admin can edit this ticket.', 'error')
+        return redirect(url_for('view_ticket', ticket_id=ticket_id))
+    old_status = ticket.status
+    old_assign = ticket.assigned_to
     assigned   = request.form.get('assigned_to')
     cat        = request.form.get('category_id')
     start      = request.form.get('start_date')
@@ -221,8 +323,23 @@ def update_ticket(ticket_id):
     ticket.spocs       = [User.query.get(int(i)) for i in spoc_ids if i]
     ticket.updated_at  = datetime.utcnow()
     db.session.commit()
+    if old_status != ticket.status:
+        notify_status_change(ticket, old_status)
+    if old_assign != ticket.assigned_to:
+        notify_assignment(ticket)
     flash('Ticket updated.', 'success')
     return redirect(url_for('view_ticket', ticket_id=ticket_id))
+
+@app.route('/ticket/<int:ticket_id>/comment', methods=['POST'])
+@login_required
+def add_comment(ticket_id):
+    ticket = Ticket.query.get_or_404(ticket_id)
+    body   = request.form.get('body', '').strip()
+    if body:
+        comment = Comment(body=body, ticket_id=ticket_id, user_id=current_user.id)
+        db.session.add(comment)
+        db.session.commit()
+    return redirect(url_for('view_ticket', ticket_id=ticket_id) + '#comments')
 
 # ─── Timeline ──────────────────────────────────────────────────────────────────
 
