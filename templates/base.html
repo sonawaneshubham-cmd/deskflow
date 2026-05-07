@@ -75,12 +75,13 @@
   <div class="nav-links">
     <a href="{{ url_for('dashboard') }}">Board</a>
     <a href="{{ url_for('timeline') }}">Timeline</a>
+    <a href="{{ url_for('active') }}">All Tasks</a>
     <a href="{{ url_for('new_ticket') }}">+ New</a>
     {% if current_user.is_admin %}<a href="{{ url_for('admin_panel') }}" style="color:#f59e0b">Admin</a>{% endif %}
   </div>
   <div class="nav-user">
     {% if current_user.team %}{{ current_user.team.name }} · {% endif %}{{ current_user.name }}
-    &nbsp;·&nbsp;<a href="{{ url_for('logout') }}" style="color:var(--text-dim)">logout</a>
+    &nbsp;·&nbsp;<a href="{{ url_for('profile') }}" style="color:var(--text-dim)">profile</a>&nbsp;·&nbsp;<a href="{{ url_for('logout') }}" style="color:var(--text-dim)">logout</a>
   </div>
 </nav>
 {% endif %}
