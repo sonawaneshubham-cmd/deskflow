@@ -1,0 +1,114 @@
+{% extends "base.html" %}
+{% block title %}— Profile{% endblock %}
+{% block head %}
+<style>
+  .profile-header{display:flex;align-items:center;gap:1.5rem;margin-bottom:2rem}
+  .avatar{width:64px;height:64px;border-radius:50%;background:var(--accent);display:flex;align-items:center;justify-content:center;font-family:var(--mono);font-size:1.5rem;font-weight:500;color:#fff;flex-shrink:0}
+  .stats-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:1rem;margin-bottom:2rem}
+  .stat-card{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:1rem 1.25rem}
+  .stat-num{font-family:var(--mono);font-size:1.6rem;font-weight:500;line-height:1}
+  .stat-label{font-size:0.72rem;color:var(--text-dim);text-transform:uppercase;letter-spacing:0.08em;margin-top:0.3rem}
+  .ticket-mini{display:flex;align-items:center;justify-content:space-between;padding:0.7rem 0.9rem;background:var(--surface);border:1px solid var(--border);border-radius:8px;margin-bottom:0.5rem;transition:border-color 0.15s}
+  .ticket-mini:hover{border-color:var(--muted)}
+  .section-title{font-family:var(--mono);font-size:0.8rem;text-transform:uppercase;letter-spacing:0.08em;color:var(--text-dim);margin-bottom:0.75rem;margin-top:1.75rem}
+</style>
+{% endblock %}
+{% block content %}
+
+<div class="profile-header">
+  <div class="avatar">{{ current_user.name[0].upper() }}</div>
+  <div>
+    <div style="font-size:1.2rem;font-weight:500">{{ current_user.name }}</div>
+    <div style="font-size:0.85rem;color:var(--text-dim);font-family:var(--mono);margin-top:0.2rem">{{ current_user.email }}</div>
+    {% if current_user.team %}
+    <div style="margin-top:0.4rem"><span class="badge" style="background:#1a1f2e;color:#94a3b8">{{ current_user.team.name }}</span></div>
+    {% endif %}
+    {% if current_user.is_admin %}
+    <div style="margin-top:0.4rem"><span class="badge" style="background:#2d1f00;color:var(--amber)">Admin</span></div>
+    {% endif %}
+  </div>
+</div>
+
+<!-- Edit name -->
+<div class="card" style="margin-bottom:1.5rem">
+  <div style="font-family:var(--mono);font-size:0.75rem;text-transform:uppercase;letter-spacing:0.08em;color:var(--text-dim);margin-bottom:0.75rem">Edit profile</div>
+  <form method="POST" action="{{ url_for('update_profile') }}" style="display:flex;gap:0.75rem;align-items:flex-end">
+    <div class="form-group" style="margin-bottom:0;flex:1">
+      <label>Display name</label>
+      <input type="text" name="name" value="{{ current_user.name }}" required/>
+    </div>
+    <button type="submit" class="btn btn-primary">Save</button>
+  </form>
+</div>
+
+<!-- Stats -->
+<div class="stats-grid">
+  <div class="stat-card"><div class="stat-num" style="color:#60a5fa">{{ stats.open }}</div><div class="stat-label">Open</div></div>
+  <div class="stat-card"><div class="stat-num" style="color:var(--amber)">{{ stats.in_progress }}</div><div class="stat-label">In Progress</div></div>
+  <div class="stat-card"><div class="stat-num" style="color:var(--green)">{{ stats.closed }}</div><div class="stat-label">Closed</div></div>
+  <div class="stat-card"><div class="stat-num" style="color:var(--red)">{{ stats.overdue }}</div><div class="stat-label">Overdue</div></div>
+  <div class="stat-card"><div class="stat-num" style="color:var(--text)">{{ stats.created }}</div><div class="stat-label">Created</div></div>
+</div>
+
+<!-- Assigned tickets -->
+<div class="section-title">Assigned to me ({{ assigned|length }})</div>
+{% for ticket in assigned %}
+{% if ticket.status != 'closed' %}
+<a href="{{ url_for('view_ticket', ticket_id=ticket.id) }}" style="text-decoration:none">
+  <div class="ticket-mini">
+    <div>
+      <div style="font-size:0.88rem;font-weight:500">#{{ ticket.id }} {{ ticket.title }}</div>
+      <div style="font-size:0.72rem;color:var(--text-dim);font-family:var(--mono);margin-top:0.15rem">
+        {% if ticket.due_date %}due {{ ticket.due_date.strftime('%d %b') }} · {% endif %}
+        {{ ticket.category.name if ticket.category else 'No category' }}
+      </div>
+    </div>
+    <div style="display:flex;gap:0.4rem;align-items:center">
+      <span class="badge badge-{{ ticket.priority }}">{{ ticket.priority }}</span>
+      <span class="badge badge-{{ ticket.status }}">{{ ticket.status.replace('_',' ') }}</span>
+      {% if ticket.is_overdue %}<span class="badge badge-overdue">overdue</span>{% endif %}
+    </div>
+  </div>
+</a>
+{% endif %}
+{% else %}
+<div style="color:var(--text-dim);font-size:0.85rem;padding:0.5rem 0">No active assigned tickets.</div>
+{% endfor %}
+
+<!-- SPOC tickets -->
+{% if spoc_on %}
+<div class="section-title">Secondary SPOC on ({{ spoc_on|length }})</div>
+{% for ticket in spoc_on %}
+<a href="{{ url_for('view_ticket', ticket_id=ticket.id) }}" style="text-decoration:none">
+  <div class="ticket-mini">
+    <div>
+      <div style="font-size:0.88rem;font-weight:500">#{{ ticket.id }} {{ ticket.title }}</div>
+      <div style="font-size:0.72rem;color:var(--text-dim);font-family:var(--mono);margin-top:0.15rem">
+        created by {{ ticket.author.name }}
+      </div>
+    </div>
+    <span class="badge badge-{{ ticket.status }}">{{ ticket.status.replace('_',' ') }}</span>
+  </div>
+</a>
+{% endfor %}
+{% endif %}
+
+<!-- Created tickets -->
+<div class="section-title">Created by me ({{ created|length }})</div>
+{% for ticket in created %}
+<a href="{{ url_for('view_ticket', ticket_id=ticket.id) }}" style="text-decoration:none">
+  <div class="ticket-mini">
+    <div>
+      <div style="font-size:0.88rem;font-weight:500">#{{ ticket.id }} {{ ticket.title }}</div>
+      <div style="font-size:0.72rem;color:var(--text-dim);font-family:var(--mono);margin-top:0.15rem">
+        {{ ticket.created_at.strftime('%d %b %Y') }} · assigned to {{ ticket.assignee.name if ticket.assignee else 'nobody' }}
+      </div>
+    </div>
+    <span class="badge badge-{{ ticket.status }}">{{ ticket.status.replace('_',' ') }}</span>
+  </div>
+</a>
+{% else %}
+<div style="color:var(--text-dim);font-size:0.85rem;padding:0.5rem 0">No tickets created yet.</div>
+{% endfor %}
+
+{% endblock %}
