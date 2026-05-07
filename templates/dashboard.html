@@ -22,7 +22,6 @@
   .tc-due-ok{color:var(--green)} .tc-due-warn{color:var(--amber)} .tc-due-over{color:var(--red)}
   .no-drag{cursor:pointer;opacity:0.85}
   .active-filter{background:var(--accent);color:#fff;border-color:var(--accent)}
-  .col-hidden{display:none}
 </style>
 {% endblock %}
 {% block content %}
@@ -37,7 +36,6 @@
   <div class="page-title">Kanban Board</div>
   <div style="display:flex;gap:0.6rem;align-items:center">
     <a href="{{ url_for('archive') }}" class="btn btn-ghost btn-sm">📁 Archive</a>
-    <button onclick="toggleClosed()" id="closed-btn" class="btn btn-ghost btn-sm">Show closed</button>
     <a href="{{ url_for('new_ticket') }}" class="btn btn-primary btn-sm">+ New ticket</a>
   </div>
 </div>
@@ -68,6 +66,12 @@
       <option value="">All teams</option>
       {% for team in teams %}
       <option value="{{ team.id }}" {% if f_team==team.id|string %}selected{% endif %}>{{ team.name }}</option>
+      {% endfor %}
+    </select>
+    <select name="assignee">
+      <option value="">All people</option>
+      {% for user in users %}
+      <option value="{{ user.id }}" {% if f_assignee==user.id|string %}selected{% endif %}>{{ user.name }}</option>
       {% endfor %}
     </select>
     <button type="submit" class="btn btn-ghost btn-sm">Filter</button>
@@ -126,27 +130,6 @@
 </div>
 
 <script>
-function toggleClosed(){
-  const col = document.getElementById('closed-col');
-  const btn = document.getElementById('closed-btn');
-  const kanban = document.querySelector('.kanban');
-  const hidden = col.classList.contains('col-hidden');
-  if(hidden){
-    col.classList.remove('col-hidden');
-    kanban.style.gridTemplateColumns = 'repeat(3,1fr)';
-    btn.textContent = 'Hide closed';
-  } else {
-    col.classList.add('col-hidden');
-    kanban.style.gridTemplateColumns = 'repeat(2,1fr)';
-    btn.textContent = 'Show closed';
-  }
-}
-document.addEventListener('DOMContentLoaded', function(){
-  const col = document.getElementById('closed-col');
-  const kanban = document.querySelector('.kanban');
-  col.classList.add('col-hidden');
-  kanban.style.gridTemplateColumns = 'repeat(2,1fr)';
-});
 let dragged = null;
 function drag(e){ dragged=e.currentTarget; e.currentTarget.classList.add('dragging'); }
 document.addEventListener('dragend',e=>{if(dragged)dragged.classList.remove('dragging');});

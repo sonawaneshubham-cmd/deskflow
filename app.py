@@ -2,7 +2,7 @@ from flask import Flask, render_template, request, redirect, url_for, flash, jso
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import LoginManager, UserMixin, login_user, logout_user, login_required, current_user
 from werkzeug.security import generate_password_hash, check_password_hash
-from datetime import datetime, date
+from datetime import datetime, date, timedelta
 import os
 import smtplib
 from email.mime.text import MIMEText
@@ -225,6 +225,7 @@ def dashboard():
     f_priority = request.args.get('priority', '')
     f_category = request.args.get('category', '')
     f_team     = request.args.get('team', '')
+    f_assignee = request.args.get('assignee', '')
 
     if current_user.is_admin:
         query = Ticket.query
@@ -245,9 +246,12 @@ def dashboard():
         query = query.filter(Ticket.category_id == int(f_category))
     if f_team:
         query = query.join(User, Ticket.assigned_to == User.id).filter(User.team_id == int(f_team))
+    if f_assignee:
+        query = query.filter(Ticket.assigned_to == int(f_assignee))
 
     all_tickets = query.order_by(Ticket.created_at.desc()).all()
 
+    cutoff = datetime.utcnow() - timedelta(hours=24)
     stats = {
         'open':        sum(1 for t in all_tickets if t.status == 'open'),
         'in_progress': sum(1 for t in all_tickets if t.status == 'in_progress'),
@@ -257,14 +261,15 @@ def dashboard():
 
     categories = Category.query.order_by(Category.name).all()
     teams      = Team.query.order_by(Team.name).all()
+    users      = User.query.order_by(User.name).all()
 
     return render_template('dashboard.html',
         open_tickets      =[t for t in all_tickets if t.status == 'open'],
         inprogress_tickets=[t for t in all_tickets if t.status == 'in_progress'],
-        closed_tickets    =[t for t in all_tickets if t.status == 'closed'],
-        stats=stats, categories=categories, teams=teams,
+        closed_tickets    =[t for t in all_tickets if t.status == 'closed' and t.updated_at >= cutoff],
+        stats=stats, categories=categories, teams=teams, users=users,
         q=q, f_status=f_status, f_priority=f_priority,
-        f_category=f_category, f_team=f_team
+        f_category=f_category, f_team=f_team, f_assignee=f_assignee
     )
 
 @app.route('/ticket/update_status', methods=['POST'])
@@ -434,82 +439,7 @@ def archive():
         q=q, f_category=f_category, f_team=f_team,
         from_date=from_date, to_date=to_date
     )
-@app.route('/active')
-@login_required
-def active():
-    q          = request.args.get('q', '').strip()
-    f_status   = request.args.get('status', '')
-    f_priority = request.args.get('priority', '')
-    f_category = request.args.get('category', '')
-    f_team     = request.args.get('team', '')
-    sort       = request.args.get('sort', 'score')
 
-    if current_user.is_admin:
-        query = Ticket.query.filter(Ticket.status != 'closed')
-    else:
-        query = Ticket.query.filter(
-            Ticket.status != 'closed',
-            (Ticket.user_id == current_user.id) |
-            (Ticket.assigned_to == current_user.id) |
-            (Ticket.spocs.any(User.id == current_user.id))
-        )
-
-    if q:
-        query = query.filter(Ticket.title.ilike(f'%{q}%') | Ticket.description.ilike(f'%{q}%'))
-    if f_status:
-        query = query.filter(Ticket.status == f_status)
-    if f_priority:
-        query = query.filter(Ticket.priority == f_priority)
-    if f_category:
-        query = query.filter(Ticket.category_id == int(f_category))
-    if f_team:
-        query = query.join(User, Ticket.assigned_to == User.id).filter(User.team_id == int(f_team))
-
-    tickets    = query.all()
-    categories = Category.query.order_by(Category.name).all()
-    teams      = Team.query.order_by(Team.name).all()
-
-    if sort == 'score':
-        tickets = sorted(tickets, key=lambda t: t.weight_score, reverse=True)
-    elif sort == 'due':
-        tickets = sorted(tickets, key=lambda t: (t.due_date is None, t.due_date or date.today()))
-    else:
-        tickets = sorted(tickets, key=lambda t: t.created_at, reverse=True)
-
-    return render_template('active.html',
-        tickets=tickets, categories=categories, teams=teams,
-        q=q, f_status=f_status, f_priority=f_priority,
-        f_category=f_category, f_team=f_team, sort=sort
-    )
-
-@app.route('/profile')
-@login_required
-def profile():
-    created  = Ticket.query.filter_by(user_id=current_user.id).order_by(Ticket.created_at.desc()).all()
-    assigned = Ticket.query.filter_by(assigned_to=current_user.id).order_by(Ticket.created_at.desc()).all()
-    spoc_on  = current_user.spoc_tickets
-    stats = {
-        'created':      len(created),
-        'assigned':     len(assigned),
-        'open':         sum(1 for t in assigned if t.status == 'open'),
-        'in_progress':  sum(1 for t in assigned if t.status == 'in_progress'),
-        'closed':       sum(1 for t in assigned if t.status == 'closed'),
-        'overdue':      sum(1 for t in assigned if t.is_overdue),
-        'total_weight': sum(t.weight_score for t in assigned if t.status != 'closed'),
-    }
-    return render_template('profile.html',
-        created=created, assigned=assigned, spoc_on=spoc_on, stats=stats
-    )
-
-@app.route('/profile/update', methods=['POST'])
-@login_required
-def update_profile():
-    name = request.form.get('name', '').strip()
-    if name:
-        current_user.name = name
-        db.session.commit()
-        flash('Profile updated.', 'success')
-    return redirect(url_for('profile'))
 # ─── Admin Panel ───────────────────────────────────────────────────────────────
 
 @app.route('/admin')
