@@ -87,6 +87,7 @@
        ondragleave="this.classList.remove('drag-over')"
        ondrop="drop(event,this)">
     <div class="col-header">{{ col_label }}<span class="col-count">{{ col_tickets|length }}</span></div>
+    <div class="kanban-cards">
     {% for ticket in col_tickets %}
     {% set can_drag = current_user.is_admin or ticket.assigned_to == current_user.id %}
     <div class="ticket-card {% if not can_drag %}no-drag{% endif %}"
@@ -118,6 +119,7 @@
     {% else %}
     <div class="empty" style="padding:2rem 1rem;font-size:0.8rem">No tickets</div>
     {% endfor %}
+    </div>
   </div>
   {% endfor %}
 </div>
