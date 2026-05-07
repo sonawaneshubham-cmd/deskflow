@@ -7,7 +7,7 @@
     <a href="{{ url_for('dashboard') }}" class="btn btn-ghost btn-sm">← Board</a>
   </div>
 
-  <!-- Details card -->
+  <!-- Details -->
   <div class="card" style="margin-bottom:1.25rem">
     <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:1rem">
       <h2 style="font-size:1.05rem;font-weight:500">{{ ticket.title }}</h2>
@@ -19,35 +19,28 @@
     </div>
     <p style="color:var(--text);line-height:1.7;white-space:pre-wrap">{{ ticket.description }}</p>
     <div style="margin-top:1.25rem;padding-top:1rem;border-top:1px solid var(--border);display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:0.75rem">
-      <div>
-        <div style="font-size:0.72rem;color:var(--text-dim);font-family:var(--mono);text-transform:uppercase;letter-spacing:0.06em">Created by</div>
-        <div style="font-size:0.88rem;margin-top:0.2rem">{{ ticket.author.name }}</div>
-      </div>
-      <div>
-        <div style="font-size:0.72rem;color:var(--text-dim);font-family:var(--mono);text-transform:uppercase;letter-spacing:0.06em">Primary Assignee</div>
-        <div style="font-size:0.88rem;margin-top:0.2rem">{{ ticket.assignee.name if ticket.assignee else '—' }}</div>
-      </div>
-      <div>
-        <div style="font-size:0.72rem;color:var(--text-dim);font-family:var(--mono);text-transform:uppercase;letter-spacing:0.06em">Team</div>
-        <div style="font-size:0.88rem;margin-top:0.2rem">{{ ticket.assignee.team.name if ticket.assignee and ticket.assignee.team else '—' }}</div>
-      </div>
-      <div>
-        <div style="font-size:0.72rem;color:var(--text-dim);font-family:var(--mono);text-transform:uppercase;letter-spacing:0.06em">Category</div>
-        <div style="font-size:0.88rem;margin-top:0.2rem">{{ ticket.category.name if ticket.category else '—' }}</div>
-      </div>
-      <div>
-        <div style="font-size:0.72rem;color:var(--text-dim);font-family:var(--mono);text-transform:uppercase;letter-spacing:0.06em">Start Date</div>
-        <div style="font-size:0.88rem;margin-top:0.2rem">{{ ticket.start_date.strftime('%d %b %Y') if ticket.start_date else '—' }}</div>
-      </div>
-      <div>
-        <div style="font-size:0.72rem;color:var(--text-dim);font-family:var(--mono);text-transform:uppercase;letter-spacing:0.06em">Due Date</div>
+      <div><div style="font-size:0.72rem;color:var(--text-dim);font-family:var(--mono);text-transform:uppercase;letter-spacing:0.06em">Created by</div><div style="font-size:0.88rem;margin-top:0.2rem">{{ ticket.author.name }}</div></div>
+      <div><div style="font-size:0.72rem;color:var(--text-dim);font-family:var(--mono);text-transform:uppercase;letter-spacing:0.06em">Assignee</div><div style="font-size:0.88rem;margin-top:0.2rem">{{ ticket.assignee.name if ticket.assignee else '—' }}</div></div>
+      <div><div style="font-size:0.72rem;color:var(--text-dim);font-family:var(--mono);text-transform:uppercase;letter-spacing:0.06em">Team</div><div style="font-size:0.88rem;margin-top:0.2rem">{{ ticket.assignee.team.name if ticket.assignee and ticket.assignee.team else '—' }}</div></div>
+      <div><div style="font-size:0.72rem;color:var(--text-dim);font-family:var(--mono);text-transform:uppercase;letter-spacing:0.06em">Category</div><div style="font-size:0.88rem;margin-top:0.2rem">{{ ticket.category.name if ticket.category else '—' }}</div></div>
+      <div><div style="font-size:0.72rem;color:var(--text-dim);font-family:var(--mono);text-transform:uppercase;letter-spacing:0.06em">Start</div><div style="font-size:0.88rem;margin-top:0.2rem">{{ ticket.start_date.strftime('%d %b %Y') if ticket.start_date else '—' }}</div></div>
+      <div><div style="font-size:0.72rem;color:var(--text-dim);font-family:var(--mono);text-transform:uppercase;letter-spacing:0.06em">Due</div>
         <div style="font-size:0.88rem;margin-top:0.2rem;{% if ticket.is_overdue %}color:var(--red){% endif %}">
           {{ ticket.due_date.strftime('%d %b %Y') if ticket.due_date else '—' }}
           {% if ticket.days_until_due is not none %}
-            <span style="font-size:0.72rem;color:{% if ticket.is_overdue %}var(--red){% elif ticket.days_until_due <= 2 %}var(--amber){% else %}var(--text-dim){% endif %}">
-              ({% if ticket.is_overdue %}{{ ticket.days_until_due|abs }}d overdue{% elif ticket.days_until_due == 0 %}today{% else %}{{ ticket.days_until_due }}d left{% endif %})
-            </span>
+            <span style="font-size:0.72rem">({% if ticket.is_overdue %}{{ ticket.days_until_due|abs }}d overdue{% elif ticket.days_until_due==0 %}today{% else %}{{ ticket.days_until_due }}d left{% endif %})</span>
           {% endif %}
+        </div>
+      </div>
+    </div>
+          <div><div style="font-size:0.72rem;color:var(--text-dim);font-family:var(--mono);text-transform:uppercase;letter-spacing:0.06em">Reference</div>
+        <div style="font-size:0.88rem;margin-top:0.2rem">
+          {% if ticket.reference_url %}<a href="{{ ticket.reference_url }}" target="_blank" style="color:var(--accent)">Open sheet →</a>{% else %}—{% endif %}
+        </div>
+      </div>
+      <div><div style="font-size:0.72rem;color:var(--text-dim);font-family:var(--mono);text-transform:uppercase;letter-spacing:0.06em">Reference</div>
+        <div style="font-size:0.88rem;margin-top:0.2rem">
+          {% if ticket.reference_url %}<a href="{{ ticket.reference_url }}" target="_blank" style="color:var(--accent)">Open sheet →</a>{% else %}—{% endif %}
         </div>
       </div>
     </div>
@@ -56,17 +49,35 @@
       <div style="font-size:0.72rem;color:var(--text-dim);font-family:var(--mono);text-transform:uppercase;letter-spacing:0.06em;margin-bottom:0.5rem">Secondary SPOCs</div>
       <div style="display:flex;flex-wrap:wrap;gap:0.4rem">
         {% for spoc in ticket.spocs %}
-        <span style="background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:0.2rem 0.6rem;font-size:0.82rem">
-          {{ spoc.name }}{% if spoc.team %} <span style="color:var(--text-dim);font-size:0.72rem">({{ spoc.team.name }})</span>{% endif %}
-        </span>
+        <span style="background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:0.2rem 0.6rem;font-size:0.82rem">{{ spoc.name }}{% if spoc.team %} <span style="color:var(--text-dim);font-size:0.72rem">({{ spoc.team.name }})</span>{% endif %}</span>
         {% endfor %}
       </div>
     </div>
     {% endif %}
   </div>
 
-  <!-- Edit card -->
-  <div class="card">
+  <!-- Quick status update — anyone with access -->
+  <div class="card" style="margin-bottom:1.25rem">
+    <div style="font-family:var(--mono);font-size:0.75rem;text-transform:uppercase;letter-spacing:0.08em;color:var(--text-dim);margin-bottom:0.75rem">Update status</div>
+    <div style="display:flex;gap:0.6rem;flex-wrap:wrap">
+      <form method="POST" action="{{ url_for('quick_status', ticket_id=ticket.id) }}">
+        <input type="hidden" name="status" value="open"/>
+        <button type="submit" class="btn btn-sm {% if ticket.status == 'open' %}btn-primary{% else %}btn-ghost{% endif %}">Open</button>
+      </form>
+      <form method="POST" action="{{ url_for('quick_status', ticket_id=ticket.id) }}">
+        <input type="hidden" name="status" value="in_progress"/>
+        <button type="submit" class="btn btn-sm {% if ticket.status == 'in_progress' %}btn-primary{% else %}btn-ghost{% endif %}">In Progress</button>
+      </form>
+      <form method="POST" action="{{ url_for('quick_status', ticket_id=ticket.id) }}">
+        <input type="hidden" name="status" value="closed"/>
+        <button type="submit" class="btn btn-sm {% if ticket.status == 'closed' %}btn-primary{% else %}btn-ghost{% endif %}">Closed</button>
+      </form>
+    </div>
+  </div>
+
+  <!-- Edit (only creator or admin) -->
+  {% if can_edit %}
+  <div class="card" style="margin-bottom:1.25rem">
     <div style="font-family:var(--mono);font-size:0.75rem;text-transform:uppercase;letter-spacing:0.08em;color:var(--text-dim);margin-bottom:1rem">Edit ticket</div>
     <form method="POST" action="{{ url_for('update_ticket', ticket_id=ticket.id) }}">
       <div class="grid-2">
@@ -93,22 +104,22 @@
           <select name="category_id">
             <option value="">— None —</option>
             {% for cat in categories %}
-            <option value="{{ cat.id }}" {% if ticket.category_id == cat.id %}selected{% endif %}>{{ cat.name }}</option>
+            <option value="{{ cat.id }}" {% if ticket.category_id==cat.id %}selected{% endif %}>{{ cat.name }}</option>
             {% endfor %}
           </select>
         </div>
         <div class="form-group">
-          <label>Primary Assignee</label>
+          <label>Assignee</label>
           <select name="assigned_to">
             <option value="">— Unassigned —</option>
             {% for user in users %}
-            <option value="{{ user.id }}" {% if ticket.assigned_to == user.id %}selected{% endif %}>{{ user.name }}{% if user.team %} ({{ user.team.name }}){% endif %}</option>
+            <option value="{{ user.id }}" {% if ticket.assigned_to==user.id %}selected{% endif %}>{{ user.name }}{% if user.team %} ({{ user.team.name }}){% endif %}</option>
             {% endfor %}
           </select>
         </div>
       </div>
       <div class="form-group">
-        <label>Secondary SPOCs <span style="font-weight:300;text-transform:none;letter-spacing:0;font-size:0.75rem">(hold Ctrl/Cmd to select multiple)</span></label>
+        <label>Secondary SPOCs <span style="font-weight:300;text-transform:none;letter-spacing:0;font-size:0.75rem">(Ctrl/Cmd to select multiple)</span></label>
         <select name="spocs" multiple>
           {% for user in users %}
           <option value="{{ user.id }}" {% if user.id in spoc_ids %}selected{% endif %}>{{ user.name }}{% if user.team %} ({{ user.team.name }}){% endif %}</option>
@@ -118,18 +129,51 @@
       <div class="grid-2">
         <div class="form-group">
           <label>Start Date</label>
-          <input type="text" name="start_date" class="datepicker" autocomplete="off"
-                 value="{{ ticket.start_date.strftime('%Y-%m-%d') if ticket.start_date else '' }}"
-                 placeholder="Pick a date"/>
+          <input type="text" name="start_date" class="datepicker" autocomplete="off" value="{{ ticket.start_date.strftime('%Y-%m-%d') if ticket.start_date else '' }}" placeholder="Pick a date"/>
         </div>
         <div class="form-group">
           <label>Due Date</label>
-          <input type="text" name="due_date" class="datepicker" autocomplete="off"
-                 value="{{ ticket.due_date.strftime('%Y-%m-%d') if ticket.due_date else '' }}"
-                 placeholder="Pick a date"/>
+          <input type="text" name="due_date" class="datepicker" autocomplete="off" value="{{ ticket.due_date.strftime('%Y-%m-%d') if ticket.due_date else '' }}" placeholder="Pick a date"/>
         </div>
       </div>
+      <div class="form-group">
+        <label>Reference URL <span style="font-weight:300;text-transform:none;letter-spacing:0;font-size:0.75rem">(Google Sheet, doc, or any link)</span></label>
+        <input type="url" name="reference_url" value="{{ ticket.reference_url or '' }}" placeholder="https://docs.google.com/spreadsheets/..."/>
+      </div>
       <button type="submit" class="btn btn-primary">Save changes</button>
+    </form>
+  </div>
+  {% else %}
+  <div style="background:#1a1f2e;border:1px solid var(--border);border-radius:8px;padding:0.75rem 1rem;margin-bottom:1.25rem;font-size:0.85rem;color:var(--text-dim)">
+    Only the ticket creator or admin can edit this ticket.
+  </div>
+  {% endif %}
+
+  <!-- Comments -->
+  <div class="card" id="comments">
+    <div style="font-family:var(--mono);font-size:0.75rem;text-transform:uppercase;letter-spacing:0.08em;color:var(--text-dim);margin-bottom:1rem">
+      Comments ({{ ticket.comments|length }})
+    </div>
+    {% for comment in ticket.comments %}
+    <div style="padding:0.85rem 0;border-bottom:1px solid var(--border)">
+      <div style="display:flex;align-items:center;gap:0.75rem;margin-bottom:0.4rem">
+        <span style="font-size:0.85rem;font-weight:500">{{ comment.commenter.name }}</span>
+        {% if comment.commenter.team %}<span style="font-size:0.72rem;color:var(--text-dim)">{{ comment.commenter.team.name }}</span>{% endif %}
+        <span style="font-size:0.72rem;color:var(--text-dim);font-family:var(--mono);margin-left:auto">{{ comment.created_at.strftime('%d %b, %H:%M') }}</span>
+      </div>
+      <p style="font-size:0.88rem;line-height:1.6;white-space:pre-wrap">{{ comment.body }}</p>
+    </div>
+    {% else %}
+    <div style="color:var(--text-dim);font-size:0.85rem;padding:0.5rem 0">No comments yet.</div>
+    {% endfor %}
+
+    <!-- Add comment -->
+    <form method="POST" action="{{ url_for('add_comment', ticket_id=ticket.id) }}" style="margin-top:1.25rem">
+      <div class="form-group">
+        <label>Add a comment</label>
+        <textarea name="body" placeholder="Write a comment..." style="min-height:80px"></textarea>
+      </div>
+      <button type="submit" class="btn btn-ghost btn-sm">Post comment</button>
     </form>
   </div>
 </div>

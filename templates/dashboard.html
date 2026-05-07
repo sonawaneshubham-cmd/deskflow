@@ -2,10 +2,13 @@
 {% block title %}— Board{% endblock %}
 {% block head %}
 <style>
-  .stats{display:grid;grid-template-columns:repeat(4,1fr);gap:1rem;margin-bottom:2rem}
+  .stats{display:grid;grid-template-columns:repeat(4,1fr);gap:1rem;margin-bottom:1.5rem}
   .stat-card{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:1.25rem 1.5rem}
   .stat-num{font-family:var(--mono);font-size:2rem;font-weight:500;line-height:1}
   .stat-label{font-size:0.75rem;color:var(--text-dim);text-transform:uppercase;letter-spacing:0.08em;margin-top:0.3rem}
+  .filters{display:flex;gap:0.6rem;margin-bottom:1.5rem;flex-wrap:wrap;align-items:center}
+  .filters input,.filters select{width:auto;padding:0.4rem 0.7rem;font-size:0.82rem;flex:1;min-width:120px}
+  .filters button{white-space:nowrap}
   .kanban{display:grid;grid-template-columns:repeat(3,1fr);gap:1.25rem;align-items:start}
   .col-header{font-family:var(--mono);font-size:0.8rem;text-transform:uppercase;letter-spacing:0.08em;color:var(--text-dim);margin-bottom:0.75rem;display:flex;align-items:center;justify-content:space-between}
   .col-count{background:var(--muted);color:var(--text);border-radius:99px;padding:0.1rem 0.5rem;font-size:0.7rem}
@@ -17,6 +20,8 @@
   .tc-title{font-size:0.88rem;font-weight:500;margin-bottom:0.4rem}
   .tc-meta{font-size:0.72rem;color:var(--text-dim);font-family:var(--mono);display:flex;flex-wrap:wrap;gap:0.5rem;margin-top:0.5rem}
   .tc-due-ok{color:var(--green)} .tc-due-warn{color:var(--amber)} .tc-due-over{color:var(--red)}
+  .no-drag{cursor:pointer;opacity:0.85}
+  .active-filter{background:var(--accent);color:#fff;border-color:var(--accent)}
 </style>
 {% endblock %}
 {% block content %}
@@ -29,8 +34,47 @@
 
 <div class="page-header">
   <div class="page-title">Kanban Board</div>
-  <a href="{{ url_for('new_ticket') }}" class="btn btn-primary btn-sm">+ New ticket</a>
+  <div style="display:flex;gap:0.6rem;align-items:center">
+    <a href="{{ url_for('archive') }}" class="btn btn-ghost btn-sm">📁 Archive</a>
+    <button onclick="toggleClosed()" id="closed-btn" class="btn btn-ghost btn-sm">Show closed</button>
+    <a href="{{ url_for('new_ticket') }}" class="btn btn-primary btn-sm">+ New ticket</a>
+  </div>
 </div>
+
+<!-- Search & Filter -->
+<form method="GET" action="{{ url_for('dashboard') }}">
+  <div class="filters">
+    <input type="text" name="q" value="{{ q }}" placeholder="Search tickets..."/>
+    <select name="status">
+      <option value="">All statuses</option>
+      <option value="open"        {% if f_status=='open' %}selected{% endif %}>Open</option>
+      <option value="in_progress" {% if f_status=='in_progress' %}selected{% endif %}>In Progress</option>
+      <option value="closed"      {% if f_status=='closed' %}selected{% endif %}>Closed</option>
+    </select>
+    <select name="priority">
+      <option value="">All priorities</option>
+      <option value="high"   {% if f_priority=='high' %}selected{% endif %}>High</option>
+      <option value="medium" {% if f_priority=='medium' %}selected{% endif %}>Medium</option>
+      <option value="low"    {% if f_priority=='low' %}selected{% endif %}>Low</option>
+    </select>
+    <select name="category">
+      <option value="">All categories</option>
+      {% for cat in categories %}
+      <option value="{{ cat.id }}" {% if f_category==cat.id|string %}selected{% endif %}>{{ cat.name }}</option>
+      {% endfor %}
+    </select>
+    <select name="team">
+      <option value="">All teams</option>
+      {% for team in teams %}
+      <option value="{{ team.id }}" {% if f_team==team.id|string %}selected{% endif %}>{{ team.name }}</option>
+      {% endfor %}
+    </select>
+    <button type="submit" class="btn btn-ghost btn-sm">Filter</button>
+    {% if q or f_status or f_priority or f_category or f_team %}
+    <a href="{{ url_for('dashboard') }}" class="btn btn-ghost btn-sm">Clear</a>
+    {% endif %}
+  </div>
+</form>
 
 <div class="kanban">
   {% for col_status, col_label, col_tickets in [
@@ -44,15 +88,22 @@
        ondrop="drop(event,this)">
     <div class="col-header">{{ col_label }}<span class="col-count">{{ col_tickets|length }}</span></div>
     {% for ticket in col_tickets %}
-    <div class="ticket-card" draggable="true"
+    {% set can_drag = current_user.is_admin or ticket.assigned_to == current_user.id %}
+    <div class="ticket-card {% if not can_drag %}no-drag{% endif %}"
+         draggable="{{ 'true' if can_drag else 'false' }}"
          data-id="{{ ticket.id }}"
-         ondragstart="drag(event)"
+         ondragstart="{% if can_drag %}drag(event){% endif %}"
          onclick="location.href='{{ url_for('view_ticket', ticket_id=ticket.id) }}'">
       <div class="tc-title">#{{ ticket.id }} {{ ticket.title }}</div>
       <div style="display:flex;gap:0.4rem;flex-wrap:wrap;margin-top:0.35rem">
         <span class="badge badge-{{ ticket.priority }}">{{ ticket.priority }}</span>
         {% if ticket.category %}<span class="badge" style="background:#1a1f2e;color:#94a3b8">{{ ticket.category.name }}</span>{% endif %}
         {% if ticket.is_overdue %}<span class="badge badge-overdue">overdue</span>{% endif %}
+        {% if ticket.comments|length > 0 %}<span class="badge" style="background:#1a1f2e;color:#94a3b8">💬 {{ ticket.comments|length }}</span>{% endif %}
+      </div>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-top:0.4rem">
+        <div style="font-family:var(--mono);font-size:0.7rem;color:var(--text-dim)">score</div>
+        <div style="font-family:var(--mono);font-size:0.82rem;font-weight:500;color:{% if ticket.weight_score >= 80 %}var(--red){% elif ticket.weight_score >= 50 %}var(--amber){% else %}var(--green){% endif %}">{{ ticket.weight_score }}</div>
       </div>
       <div class="tc-meta">
         {% if ticket.assignee %}<span>→ {{ ticket.assignee.name }}</span>{% endif %}
@@ -72,17 +123,25 @@
 </div>
 
 <script>
+function toggleClosed(){
+  const col = document.getElementById('closed-col');
+  const btn = document.getElementById('closed-btn');
+  const hidden = col.style.display === 'none';
+  col.style.display = hidden ? 'block' : 'none';
+  btn.textContent = hidden ? 'Hide closed' : 'Show closed';
+}
+document.addEventListener('DOMContentLoaded', function(){
+  document.getElementById('closed-col').style.display = 'none';
+});
 let dragged = null;
-function drag(e){ dragged = e.currentTarget; e.currentTarget.classList.add('dragging'); }
-document.addEventListener('dragend', e => { if(dragged) dragged.classList.remove('dragging'); });
-function drop(e, col){
+function drag(e){ dragged=e.currentTarget; e.currentTarget.classList.add('dragging'); }
+document.addEventListener('dragend',e=>{if(dragged)dragged.classList.remove('dragging');});
+function drop(e,col){
   e.preventDefault(); col.classList.remove('drag-over');
   if(!dragged) return;
-  const status = col.dataset.status;
-  const id     = dragged.dataset.id;
-  fetch('/ticket/update_status', {
-    method:'POST', headers:{'Content-Type':'application/json'},
-    body: JSON.stringify({ticket_id: parseInt(id), status: status})
+  fetch('/ticket/update_status',{
+    method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({ticket_id:parseInt(dragged.dataset.id),status:col.dataset.status})
   }).then(()=>location.reload());
 }
 </script>
