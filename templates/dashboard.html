@@ -82,7 +82,7 @@
       ('in_progress','In Progress', inprogress_tickets),
       ('closed','Closed', closed_tickets)
   ] %}
-  <div class="kanban-col" data-status="{{ col_status }}"
+  <div class="kanban-col" {% if col_status == 'closed' %}id="closed-col"{% endif %} data-status="{{ col_status }}"
        ondragover="event.preventDefault();this.classList.add('drag-over')"
        ondragleave="this.classList.remove('drag-over')"
        ondrop="drop(event,this)">
