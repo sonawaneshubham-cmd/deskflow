@@ -360,6 +360,8 @@ def timeline():
 
 @app.route('/ticket/<int:ticket_id>/quick_status', methods=['POST'])
 @login_required
+@app.route('/ticket/<int:ticket_id>/quick_status', methods=['POST'])
+@login_required
 def quick_status(ticket_id):
     ticket     = Ticket.query.get_or_404(ticket_id)
     old_status = ticket.status
@@ -371,6 +373,8 @@ def quick_status(ticket_id):
     flash(f'Status updated to {ticket.status.replace("_", " ")}.', 'success')
     return redirect(url_for('view_ticket', ticket_id=ticket_id))
 
+@app.route('/archive')
+@login_required
 @app.route('/archive')
 @login_required
 def archive():
