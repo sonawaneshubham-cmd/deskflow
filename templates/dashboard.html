@@ -22,6 +22,7 @@
   .tc-due-ok{color:var(--green)} .tc-due-warn{color:var(--amber)} .tc-due-over{color:var(--red)}
   .no-drag{cursor:pointer;opacity:0.85}
   .active-filter{background:var(--accent);color:#fff;border-color:var(--accent)}
+  .col-hidden{display:none}
 </style>
 {% endblock %}
 {% block content %}
@@ -128,12 +129,23 @@
 function toggleClosed(){
   const col = document.getElementById('closed-col');
   const btn = document.getElementById('closed-btn');
-  const hidden = col.style.display === 'none';
-  col.style.display = hidden ? 'block' : 'none';
-  btn.textContent = hidden ? 'Hide closed' : 'Show closed';
+  const kanban = document.querySelector('.kanban');
+  const hidden = col.classList.contains('col-hidden');
+  if(hidden){
+    col.classList.remove('col-hidden');
+    kanban.style.gridTemplateColumns = 'repeat(3,1fr)';
+    btn.textContent = 'Hide closed';
+  } else {
+    col.classList.add('col-hidden');
+    kanban.style.gridTemplateColumns = 'repeat(2,1fr)';
+    btn.textContent = 'Show closed';
+  }
 }
 document.addEventListener('DOMContentLoaded', function(){
-  document.getElementById('closed-col').style.display = 'none';
+  const col = document.getElementById('closed-col');
+  const kanban = document.querySelector('.kanban');
+  col.classList.add('col-hidden');
+  kanban.style.gridTemplateColumns = 'repeat(2,1fr)';
 });
 let dragged = null;
 function drag(e){ dragged=e.currentTarget; e.currentTarget.classList.add('dragging'); }
