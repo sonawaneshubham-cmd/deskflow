@@ -78,6 +78,32 @@ class Ticket(db.Model):
             return (self.due_date - date.today()).days
         return None
 
+
+    # ─── Weight config (tune these values as needed) ──────────────────────────
+    PRIORITY_WEIGHT  = {'high': 40, 'medium': 20, 'low': 10}
+    TIMELINE_WEIGHT  = 50   # max points for timeline urgency
+    CATEGORY_WEIGHT  = 10   # base points for having a category
+
+    @property
+    def weight_score(self):
+        score = 0
+        # Priority contribution
+        score += self.PRIORITY_WEIGHT.get(self.priority, 0)
+        # Category contribution
+        if self.category_id:
+            score += self.CATEGORY_WEIGHT
+        # Timeline urgency — highest weight
+        d = self.days_until_due
+        if d is not None:
+            if d < 0:       score += self.TIMELINE_WEIGHT        # overdue = max urgency
+            elif d == 0:    score += self.TIMELINE_WEIGHT        # due today
+            elif d <= 2:    score += int(self.TIMELINE_WEIGHT * 0.85)
+            elif d <= 5:    score += int(self.TIMELINE_WEIGHT * 0.65)
+            elif d <= 10:   score += int(self.TIMELINE_WEIGHT * 0.40)
+            elif d <= 20:   score += int(self.TIMELINE_WEIGHT * 0.20)
+            else:           score += int(self.TIMELINE_WEIGHT * 0.05)
+        return score
+
     def can_edit(self, user):
         return user.is_admin or self.user_id == user.id
 
