@@ -358,6 +358,57 @@ def timeline():
         ).order_by(Ticket.due_date).all()
     return render_template('timeline.html', tickets=tickets)
 
+@app.route('/ticket/<int:ticket_id>/quick_status', methods=['POST'])
+@login_required
+def quick_status(ticket_id):
+    ticket     = Ticket.query.get_or_404(ticket_id)
+    old_status = ticket.status
+    ticket.status     = request.form.get('status', ticket.status)
+    ticket.updated_at = datetime.utcnow()
+    db.session.commit()
+    if old_status != ticket.status:
+        notify_status_change(ticket, old_status)
+    flash(f'Status updated to {ticket.status.replace("_", " ")}.', 'success')
+    return redirect(url_for('view_ticket', ticket_id=ticket_id))
+
+@app.route('/archive')
+@login_required
+def archive():
+    q          = request.args.get('q', '').strip()
+    f_category = request.args.get('category', '')
+    f_team     = request.args.get('team', '')
+    from_date  = request.args.get('from_date', '')
+    to_date    = request.args.get('to_date', '')
+
+    if current_user.is_admin:
+        query = Ticket.query.filter(Ticket.status == 'closed')
+    else:
+        query = Ticket.query.filter(
+            Ticket.status == 'closed',
+            (Ticket.user_id == current_user.id) |
+            (Ticket.assigned_to == current_user.id) |
+            (Ticket.spocs.any(User.id == current_user.id))
+        )
+    if q:
+        query = query.filter(Ticket.title.ilike(f'%{q}%') | Ticket.description.ilike(f'%{q}%'))
+    if f_category:
+        query = query.filter(Ticket.category_id == int(f_category))
+    if f_team:
+        query = query.join(User, Ticket.assigned_to == User.id).filter(User.team_id == int(f_team))
+    if from_date:
+        query = query.filter(Ticket.updated_at >= datetime.strptime(from_date, '%Y-%m-%d'))
+    if to_date:
+        query = query.filter(Ticket.updated_at <= datetime.strptime(to_date, '%Y-%m-%d'))
+
+    tickets    = query.order_by(Ticket.updated_at.desc()).all()
+    categories = Category.query.order_by(Category.name).all()
+    teams      = Team.query.order_by(Team.name).all()
+    return render_template('archive.html',
+        tickets=tickets, categories=categories, teams=teams,
+        q=q, f_category=f_category, f_team=f_team,
+        from_date=from_date, to_date=to_date
+    )
+
 # ─── Admin Panel ───────────────────────────────────────────────────────────────
 
 @app.route('/admin')
