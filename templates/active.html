@@ -1,0 +1,107 @@
+{% extends "base.html" %}
+{% block title %}— Active Tasks{% endblock %}
+{% block head %}
+<style>
+  .task-row{display:grid;grid-template-columns:2fr 1fr 1fr 1fr 80px 60px;align-items:center;gap:1rem;background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:0.9rem 1.1rem;margin-bottom:0.5rem;transition:border-color 0.15s}
+  .task-row:hover{border-color:var(--muted)}
+  .filters{display:flex;gap:0.6rem;margin-bottom:1.5rem;flex-wrap:wrap}
+  .filters input,.filters select{width:auto;padding:0.4rem 0.7rem;font-size:0.82rem;flex:1;min-width:120px}
+  .score-high{color:var(--red)} .score-med{color:var(--amber)} .score-low{color:var(--green)}
+</style>
+{% endblock %}
+{% block content %}
+<div class="page-header">
+  <div class="page-title">All Active Tasks</div>
+  <a href="{{ url_for('new_ticket') }}" class="btn btn-primary btn-sm">+ New ticket</a>
+</div>
+
+<form method="GET" action="{{ url_for('active') }}">
+  <div class="filters">
+    <input type="text" name="q" value="{{ q }}" placeholder="Search..."/>
+    <select name="status">
+      <option value="">All statuses</option>
+      <option value="open"        {% if f_status=='open' %}selected{% endif %}>Open</option>
+      <option value="in_progress" {% if f_status=='in_progress' %}selected{% endif %}>In Progress</option>
+    </select>
+    <select name="priority">
+      <option value="">All priorities</option>
+      <option value="high"   {% if f_priority=='high' %}selected{% endif %}>High</option>
+      <option value="medium" {% if f_priority=='medium' %}selected{% endif %}>Medium</option>
+      <option value="low"    {% if f_priority=='low' %}selected{% endif %}>Low</option>
+    </select>
+    <select name="category">
+      <option value="">All categories</option>
+      {% for cat in categories %}
+      <option value="{{ cat.id }}" {% if f_category==cat.id|string %}selected{% endif %}>{{ cat.name }}</option>
+      {% endfor %}
+    </select>
+    <select name="team">
+      <option value="">All teams</option>
+      {% for team in teams %}
+      <option value="{{ team.id }}" {% if f_team==team.id|string %}selected{% endif %}>{{ team.name }}</option>
+      {% endfor %}
+    </select>
+    <select name="sort">
+      <option value="score"   {% if sort=='score' %}selected{% endif %}>Sort: Score ↓</option>
+      <option value="due"     {% if sort=='due' %}selected{% endif %}>Sort: Due date</option>
+      <option value="created" {% if sort=='created' %}selected{% endif %}>Sort: Newest</option>
+    </select>
+    <button type="submit" class="btn btn-ghost btn-sm">Filter</button>
+    {% if q or f_status or f_priority or f_category or f_team %}
+    <a href="{{ url_for('active') }}" class="btn btn-ghost btn-sm">Clear</a>
+    {% endif %}
+  </div>
+</form>
+
+<!-- Header row -->
+<div style="display:grid;grid-template-columns:2fr 1fr 1fr 1fr 80px 60px;gap:1rem;padding:0 1.1rem;margin-bottom:0.5rem">
+  {% for h in ['Ticket','Assignee','Category','Due','Status','Score'] %}
+  <div style="font-size:0.72rem;color:var(--text-dim);font-family:var(--mono);text-transform:uppercase;letter-spacing:0.06em">{{ h }}</div>
+  {% endfor %}
+</div>
+
+{% if tickets %}
+{% for ticket in tickets %}
+<a href="{{ url_for('view_ticket', ticket_id=ticket.id) }}" style="text-decoration:none">
+  <div class="task-row" style="{% if ticket.is_overdue %}border-color:#7f1d1d{% endif %}">
+    <div>
+      <div style="font-weight:500;font-size:0.9rem">#{{ ticket.id }} {{ ticket.title }}</div>
+      <div style="font-size:0.72rem;color:var(--text-dim);font-family:var(--mono);margin-top:0.15rem;display:flex;gap:0.5rem">
+        <span class="badge badge-{{ ticket.priority }}">{{ ticket.priority }}</span>
+        {% if ticket.is_overdue %}<span class="badge badge-overdue">overdue</span>{% endif %}
+        {% if ticket.spocs %}<span style="color:var(--text-dim)">+{{ ticket.spocs|length }} spoc{{ 's' if ticket.spocs|length > 1 else '' }}</span>{% endif %}
+      </div>
+    </div>
+    <div style="font-size:0.85rem">{{ ticket.assignee.name if ticket.assignee else '—' }}
+      {% if ticket.assignee and ticket.assignee.team %}<div style="font-size:0.72rem;color:var(--text-dim)">{{ ticket.assignee.team.name }}</div>{% endif %}
+    </div>
+    <div style="font-size:0.85rem">{{ ticket.category.name if ticket.category else '—' }}</div>
+    <div style="font-size:0.85rem;font-family:var(--mono);{% if ticket.is_overdue %}color:var(--red){% elif ticket.days_until_due is not none and ticket.days_until_due <= 2 %}color:var(--amber){% endif %}">
+      {% if ticket.due_date %}
+        {{ ticket.due_date.strftime('%d %b') }}
+        <div style="font-size:0.7rem;color:inherit">
+          {% if ticket.is_overdue %}{{ ticket.days_until_due|abs }}d over
+          {% elif ticket.days_until_due == 0 %}today
+          {% elif ticket.days_until_due %}{{ ticket.days_until_due }}d left{% endif %}
+        </div>
+      {% else %}—{% endif %}
+    </div>
+    <span class="badge badge-{{ ticket.status }}">{{ ticket.status.replace('_',' ') }}</span>
+    <div style="font-family:var(--mono);font-size:0.88rem;font-weight:500;class="{% if ticket.weight_score >= 80 %}score-high{% elif ticket.weight_score >= 50 %}score-med{% else %}score-low{% endif %}">
+      {{ ticket.weight_score }}
+    </div>
+  </div>
+</a>
+{% endfor %}
+{% else %}
+<div class="empty">
+  <div style="font-size:2rem;margin-bottom:0.75rem">✅</div>
+  <p>No active tasks found.</p>
+</div>
+{% endif %}
+
+<div style="margin-top:1rem;font-size:0.82rem;color:var(--text-dim);font-family:var(--mono);display:flex;justify-content:space-between">
+  <span>{{ tickets|length }} task{{ 's' if tickets|length != 1 else '' }}</span>
+  <span>total score: {{ tickets|sum(attribute='weight_score') }}</span>
+</div>
+{% endblock %}
