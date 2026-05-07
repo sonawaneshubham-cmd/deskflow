@@ -101,6 +101,10 @@
         {% if ticket.is_overdue %}<span class="badge badge-overdue">overdue</span>{% endif %}
         {% if ticket.comments|length > 0 %}<span class="badge" style="background:#1a1f2e;color:#94a3b8">💬 {{ ticket.comments|length }}</span>{% endif %}
       </div>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-top:0.4rem">
+        <div style="font-family:var(--mono);font-size:0.7rem;color:var(--text-dim)">score</div>
+        <div style="font-family:var(--mono);font-size:0.82rem;font-weight:500;color:{% if ticket.weight_score >= 80 %}var(--red){% elif ticket.weight_score >= 50 %}var(--amber){% else %}var(--green){% endif %}">{{ ticket.weight_score }}</div>
+      </div>
       <div class="tc-meta">
         {% if ticket.assignee %}<span>→ {{ ticket.assignee.name }}</span>{% endif %}
         {% if ticket.due_date %}
