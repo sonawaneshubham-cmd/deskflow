@@ -174,7 +174,9 @@ def send_email(to, subject, body):
             msg['Subject'] = subject
             msg['From']    = MAIL_USER
             msg['To']      = to
-            with smtplib.SMTP_SSL('smtp.gmail.com', 465) as s:
+            with smtplib.SMTP('smtp.gmail.com', 587) as s:
+                s.ehlo()
+                s.starttls()
                 s.login(MAIL_USER, MAIL_PASS)
                 s.send_message(msg)
         except Exception as e:
