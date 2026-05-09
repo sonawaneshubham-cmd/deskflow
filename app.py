@@ -711,6 +711,21 @@ def assign_team(user_id):
     flash(f'{user.name} assigned to team.', 'success')
     return redirect(url_for('admin_panel'))
 
+@app.route('/test_email')
+@login_required
+def test_email():
+    if not current_user.is_admin:
+        return 'Admin only'
+    import os
+    mail_user = os.environ.get('MAIL_USER', 'NOT SET')
+    mail_pass = os.environ.get('MAIL_PASS', 'NOT SET')
+    try:
+        import smtplib
+        with smtplib.SMTP_SSL('smtp.gmail.com', 465) as s:
+            s.login(mail_user, mail_pass)
+        return f'✅ Email works! Logged in as {mail_user}'
+    except Exception as e:
+        return f'❌ Email failed. User: {mail_user}, Pass set: {mail_pass != "NOT SET"}, Error: {str(e)}'
 # ─── Init ──────────────────────────────────────────────────────────────────────
 
 if __name__ == '__main__':
