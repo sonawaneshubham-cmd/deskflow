@@ -15,31 +15,59 @@
 {% endblock %}
 {% block content %}
 
+{% set u = viewed_user if viewed_user is defined else current_user %}
+{% set is_own = (u.id == current_user.id) %}
+
+<div class="page-header">
+  <div class="page-title">{{ 'Your Profile' if is_own else u.name + "'s Profile" }}</div>
+  <a href="{{ url_for('dashboard') }}" class="btn btn-ghost btn-sm">← Board</a>
+</div>
+
 <div class="profile-header">
-  <div class="avatar">{{ current_user.name[0].upper() }}</div>
+  <div class="avatar">{{ u.name[0].upper() }}</div>
   <div>
-    <div style="font-size:1.2rem;font-weight:500">{{ current_user.name }}</div>
-    <div style="font-size:0.85rem;color:var(--text-dim);font-family:var(--mono);margin-top:0.2rem">{{ current_user.email }}</div>
-    {% if current_user.team %}
-    <div style="margin-top:0.4rem"><span class="badge" style="background:#1a1f2e;color:#94a3b8">{{ current_user.team.name }}</span></div>
-    {% endif %}
-    {% if current_user.is_admin %}
-    <div style="margin-top:0.4rem"><span class="badge" style="background:#2d1f00;color:var(--amber)">Admin</span></div>
-    {% endif %}
+    <div style="font-size:1.2rem;font-weight:500">{{ u.name }}</div>
+    <div style="font-size:0.85rem;color:var(--text-dim);font-family:var(--mono);margin-top:0.2rem">{{ u.email }}</div>
+    {% if u.team %}<div style="margin-top:0.4rem"><span class="badge" style="background:#1a1f2e;color:#94a3b8">{{ u.team.name }}</span></div>{% endif %}
+    {% if u.is_admin %}<div style="margin-top:0.4rem"><span class="badge" style="background:#2d1f00;color:var(--amber)">Admin</span></div>{% endif %}
   </div>
 </div>
 
-<!-- Edit name -->
-<div class="card" style="margin-bottom:1.5rem">
-  <div style="font-family:var(--mono);font-size:0.75rem;text-transform:uppercase;letter-spacing:0.08em;color:var(--text-dim);margin-bottom:0.75rem">Edit profile</div>
+<!-- Edit own name -->
+{% if is_own %}
+<div class="card" style="margin-bottom:1.25rem">
+  <div style="font-family:var(--mono);font-size:0.75rem;text-transform:uppercase;letter-spacing:0.08em;color:var(--text-dim);margin-bottom:0.75rem">Edit your name</div>
   <form method="POST" action="{{ url_for('update_profile') }}" style="display:flex;gap:0.75rem;align-items:flex-end">
     <div class="form-group" style="margin-bottom:0;flex:1">
       <label>Display name</label>
-      <input type="text" name="name" value="{{ current_user.name }}" required/>
+      <input type="text" name="name" value="{{ u.name }}" required/>
     </div>
     <button type="submit" class="btn btn-primary">Save</button>
   </form>
 </div>
+{% endif %}
+
+<!-- Admin controls -->
+{% if current_user.is_admin and not is_own %}
+<div class="card" style="margin-bottom:1.25rem;border-color:#7f1d1d">
+  <div style="font-family:var(--mono);font-size:0.75rem;text-transform:uppercase;letter-spacing:0.08em;color:var(--text-dim);margin-bottom:1rem">Admin controls</div>
+
+  <!-- Reset password -->
+  <form method="POST" action="{{ url_for('reset_password', user_id=u.id) }}" style="display:flex;gap:0.75rem;align-items:flex-end;margin-bottom:1rem">
+    <div class="form-group" style="margin-bottom:0;flex:1">
+      <label>Reset password</label>
+      <input type="text" name="new_password" placeholder="New password (min 6 chars)"/>
+    </div>
+    <button type="submit" class="btn btn-ghost">Reset</button>
+  </form>
+
+  <!-- Delete account -->
+  <form method="POST" action="{{ url_for('delete_user', user_id=u.id) }}"
+        onsubmit="return confirm('Delete {{ u.name }}? Their tickets will be reassigned to you.')">
+    <button type="submit" class="btn btn-danger btn-sm">🗑 Delete account</button>
+  </form>
+</div>
+{% endif %}
 
 <!-- Stats -->
 <div class="stats-grid">
@@ -51,27 +79,24 @@
 </div>
 
 <!-- Assigned tickets -->
-<div class="section-title">Assigned to me ({{ assigned|length }})</div>
-{% for ticket in assigned %}
-{% if ticket.status != 'closed' %}
+<div class="section-title">Assigned ({{ assigned|length }})</div>
+{% for ticket in assigned %}{% if ticket.status != 'closed' %}
 <a href="{{ url_for('view_ticket', ticket_id=ticket.id) }}" style="text-decoration:none">
   <div class="ticket-mini">
     <div>
       <div style="font-size:0.88rem;font-weight:500">#{{ ticket.id }} {{ ticket.title }}</div>
       <div style="font-size:0.72rem;color:var(--text-dim);font-family:var(--mono);margin-top:0.15rem">
-        {% if ticket.due_date %}due {{ ticket.due_date.strftime('%d %b') }} · {% endif %}
-        {{ ticket.category.name if ticket.category else 'No category' }}
+        {% if ticket.due_date %}due {{ ticket.due_date.strftime('%d %b') }} · {% endif %}{{ ticket.category.name if ticket.category else 'No category' }}
       </div>
     </div>
-    <div style="display:flex;gap:0.4rem;align-items:center">
+    <div style="display:flex;gap:0.4rem">
       <span class="badge badge-{{ ticket.priority }}">{{ ticket.priority }}</span>
       <span class="badge badge-{{ ticket.status }}">{{ ticket.status.replace('_',' ') }}</span>
       {% if ticket.is_overdue %}<span class="badge badge-overdue">overdue</span>{% endif %}
     </div>
   </div>
 </a>
-{% endif %}
-{% else %}
+{% endif %}{% else %}
 <div style="color:var(--text-dim);font-size:0.85rem;padding:0.5rem 0">No active assigned tickets.</div>
 {% endfor %}
 
@@ -83,9 +108,7 @@
   <div class="ticket-mini">
     <div>
       <div style="font-size:0.88rem;font-weight:500">#{{ ticket.id }} {{ ticket.title }}</div>
-      <div style="font-size:0.72rem;color:var(--text-dim);font-family:var(--mono);margin-top:0.15rem">
-        created by {{ ticket.author.name }}
-      </div>
+      <div style="font-size:0.72rem;color:var(--text-dim);font-family:var(--mono);margin-top:0.15rem">by {{ ticket.author.name }}</div>
     </div>
     <span class="badge badge-{{ ticket.status }}">{{ ticket.status.replace('_',' ') }}</span>
   </div>
@@ -94,7 +117,7 @@
 {% endif %}
 
 <!-- Created tickets -->
-<div class="section-title">Created by me ({{ created|length }})</div>
+<div class="section-title">Created ({{ created|length }})</div>
 {% for ticket in created %}
 <a href="{{ url_for('view_ticket', ticket_id=ticket.id) }}" style="text-decoration:none">
   <div class="ticket-mini">
@@ -110,5 +133,4 @@
 {% else %}
 <div style="color:var(--text-dim);font-size:0.85rem;padding:0.5rem 0">No tickets created yet.</div>
 {% endfor %}
-
 {% endblock %}

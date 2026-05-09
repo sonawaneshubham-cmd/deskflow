@@ -33,7 +33,9 @@
     {% for user in users %}
     <div style="display:flex;align-items:center;justify-content:space-between;padding:0.6rem 0.75rem;background:var(--bg);border:1px solid var(--border);border-radius:6px;margin-bottom:0.4rem">
       <div>
-        <div style="font-size:0.88rem;font-weight:500">{{ user.name }}</div>
+        <div style="font-size:0.88rem;font-weight:500">
+          <a href="{{ url_for('view_profile', user_id=user.id) }}" style="color:var(--text)">{{ user.name }}</a>
+        </div>
         <div style="font-size:0.72rem;color:var(--text-dim);font-family:var(--mono)">{{ user.email }}</div>
       </div>
       <form method="POST" action="{{ url_for('assign_team', user_id=user.id) }}" style="display:flex;gap:0.4rem;align-items:center">

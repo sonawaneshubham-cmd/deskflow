@@ -513,6 +513,65 @@ def update_profile():
         flash('Profile updated.', 'success')
     return redirect(url_for('profile'))
 
+
+@app.route('/profile/<int:user_id>')
+@login_required
+def view_profile(user_id):
+    if not current_user.is_admin and current_user.id != user_id:
+        flash('Access denied.', 'error')
+        return redirect(url_for('dashboard'))
+    user     = User.query.get_or_404(user_id)
+    created  = Ticket.query.filter_by(user_id=user.id).order_by(Ticket.created_at.desc()).all()
+    assigned = Ticket.query.filter_by(assigned_to=user.id).order_by(Ticket.created_at.desc()).all()
+    spoc_on  = user.spoc_tickets
+    stats = {
+        'created':      len(created),
+        'assigned':     len(assigned),
+        'open':         sum(1 for t in assigned if t.status == 'open'),
+        'in_progress':  sum(1 for t in assigned if t.status == 'in_progress'),
+        'closed':       sum(1 for t in assigned if t.status == 'closed'),
+        'overdue':      sum(1 for t in assigned if t.is_overdue),
+        'total_weight': sum(t.weight_score for t in assigned if t.status != 'closed'),
+    }
+    return render_template('profile.html',
+        viewed_user=user, created=created, assigned=assigned,
+        spoc_on=spoc_on, stats=stats
+    )
+
+@app.route('/admin/user/<int:user_id>/reset_password', methods=['POST'])
+@login_required
+def reset_password(user_id):
+    if not current_user.is_admin:
+        flash('Admin only.', 'error')
+        return redirect(url_for('dashboard'))
+    user     = User.query.get_or_404(user_id)
+    new_pass = request.form.get('new_password', '').strip()
+    if len(new_pass) < 6:
+        flash('Password must be at least 6 characters.', 'error')
+        return redirect(url_for('view_profile', user_id=user_id))
+    user.password = generate_password_hash(new_pass)
+    db.session.commit()
+    flash(f'Password reset for {user.name}.', 'success')
+    return redirect(url_for('view_profile', user_id=user_id))
+
+@app.route('/admin/user/<int:user_id>/delete', methods=['POST'])
+@login_required
+def delete_user(user_id):
+    if not current_user.is_admin:
+        flash('Admin only.', 'error')
+        return redirect(url_for('dashboard'))
+    if user_id == current_user.id:
+        flash('You cannot delete your own account.', 'error')
+        return redirect(url_for('admin_panel'))
+    user = User.query.get_or_404(user_id)
+    # Unassign their tickets rather than deleting them
+    Ticket.query.filter_by(assigned_to=user.id).update({'assigned_to': None})
+    Ticket.query.filter_by(user_id=user.id).update({'user_id': current_user.id})
+    db.session.delete(user)
+    db.session.commit()
+    flash(f'{user.name} has been deleted.', 'success')
+    return redirect(url_for('admin_panel'))
+
 # ─── Admin Panel ───────────────────────────────────────────────────────────────
 
 @app.route('/admin')
