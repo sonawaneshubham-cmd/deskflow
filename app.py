@@ -5,6 +5,7 @@ from werkzeug.security import generate_password_hash, check_password_hash
 from datetime import datetime, date, timedelta
 import os
 import smtplib
+import threading
 from email.mime.text import MIMEText
 
 app = Flask(__name__)
@@ -123,16 +124,18 @@ def load_user(user_id):
 def send_email(to, subject, body):
     if not MAIL_USER or not MAIL_PASS:
         return
-    try:
-        msg = MIMEText(body, 'html')
-        msg['Subject'] = subject
-        msg['From']    = MAIL_USER
-        msg['To']      = to
-        with smtplib.SMTP_SSL('smtp.gmail.com', 465) as s:
-            s.login(MAIL_USER, MAIL_PASS)
-            s.send_message(msg)
-    except Exception as e:
-        print(f'Email error: {e}')
+    def _send():
+        try:
+            msg = MIMEText(body, 'html')
+            msg['Subject'] = subject
+            msg['From']    = MAIL_USER
+            msg['To']      = to
+            with smtplib.SMTP_SSL('smtp.gmail.com', 465) as s:
+                s.login(MAIL_USER, MAIL_PASS)
+                s.send_message(msg)
+        except Exception as e:
+            print(f'Email error: {e}')
+    threading.Thread(target=_send, daemon=True).start()
 
 def notify_assignment(ticket):
     if not ticket.assignee:
@@ -571,6 +574,19 @@ def delete_user(user_id):
     db.session.commit()
     flash(f'{user.name} has been deleted.', 'success')
     return redirect(url_for('admin_panel'))
+
+
+@app.route('/ticket/<int:ticket_id>/delete', methods=['POST'])
+@login_required
+def delete_ticket(ticket_id):
+    if not current_user.is_admin:
+        flash('Admin only.', 'error')
+        return redirect(url_for('dashboard'))
+    ticket = Ticket.query.get_or_404(ticket_id)
+    db.session.delete(ticket)
+    db.session.commit()
+    flash('Ticket deleted.', 'success')
+    return redirect(url_for('dashboard'))
 
 # ─── Admin Panel ───────────────────────────────────────────────────────────────
 

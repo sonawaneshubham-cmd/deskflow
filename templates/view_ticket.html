@@ -175,6 +175,16 @@
       </div>
       <button type="submit" class="btn btn-ghost btn-sm">Post comment</button>
     </form>
+
+  <!-- Delete ticket (admin only) -->
+  {% if current_user.is_admin %}
+  <div style="margin-top:1rem;padding-top:1rem;border-top:1px solid var(--border)">
+    <form method="POST" action="{{ url_for('delete_ticket', ticket_id=ticket.id) }}"
+          onsubmit="return confirm('Permanently delete ticket #{{ ticket.id }}? This cannot be undone.')">
+      <button type="submit" class="btn btn-danger btn-sm">🗑 Delete ticket</button>
+    </form>
+  </div>
+  {% endif %}
   </div>
 </div>
 {% endblock %}
