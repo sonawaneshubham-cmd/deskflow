@@ -6,6 +6,16 @@
   <a href="{{ url_for('dashboard') }}" class="btn btn-ghost btn-sm">← Board</a>
 </div>
 
+
+  <!-- Due date reminders -->
+  <div class="card" style="margin-bottom:1.5rem">
+    <div style="font-family:var(--mono);font-size:0.8rem;text-transform:uppercase;letter-spacing:0.08em;color:var(--text-dim);margin-bottom:0.75rem">Due Date Reminders</div>
+    <p style="font-size:0.85rem;color:var(--text-dim);margin-bottom:1rem">Send email reminders to all assignees whose tickets are due tomorrow.</p>
+    <form method="POST" action="{{ url_for('trigger_reminders') }}">
+      <button type="submit" class="btn btn-ghost btn-sm">📧 Send reminders now</button>
+    </form>
+  </div>
+
 <div style="display:grid;grid-template-columns:1fr 1fr;gap:1.5rem;align-items:start">
 
   <!-- Categories -->

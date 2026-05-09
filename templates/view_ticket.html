@@ -149,6 +149,23 @@
   </div>
   {% endif %}
 
+
+  <!-- Ticket Log -->
+  {% if ticket.logs %}
+  <div class="card" style="margin-bottom:1.25rem">
+    <div style="font-family:var(--mono);font-size:0.75rem;text-transform:uppercase;letter-spacing:0.08em;color:var(--text-dim);margin-bottom:1rem">Activity log</div>
+    {% for log in ticket.logs|sort(attribute='created_at', reverse=True) %}
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:0.5rem 0;border-bottom:1px solid var(--border);font-size:0.82rem">
+      <div>
+        <span style="font-weight:500">{{ log.actor.name }}</span>
+        <span style="color:var(--text-dim)"> — {{ log.action }}</span>
+      </div>
+      <span style="font-family:var(--mono);font-size:0.72rem;color:var(--text-dim)">{{ log.created_at.strftime('%d %b, %H:%M') }}</span>
+    </div>
+    {% endfor %}
+  </div>
+  {% endif %}
+
   <!-- Comments -->
   <div class="card" id="comments">
     <div style="font-family:var(--mono);font-size:0.75rem;text-transform:uppercase;letter-spacing:0.08em;color:var(--text-dim);margin-bottom:1rem">
@@ -171,7 +188,7 @@
     <form method="POST" action="{{ url_for('add_comment', ticket_id=ticket.id) }}" style="margin-top:1.25rem">
       <div class="form-group">
         <label>Add a comment</label>
-        <textarea name="body" placeholder="Write a comment..." style="min-height:80px"></textarea>
+        <textarea name="body" placeholder="Write a comment... use @name to mention someone" style="min-height:80px"></textarea>
       </div>
       <button type="submit" class="btn btn-ghost btn-sm">Post comment</button>
     </form>

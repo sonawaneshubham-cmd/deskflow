@@ -66,6 +66,7 @@ class Ticket(db.Model):
     reference_url = db.Column(db.String(500), nullable=True)
     spocs       = db.relationship('User', secondary=ticket_spocs, backref='spoc_tickets', lazy=True)
     comments    = db.relationship('Comment', backref='ticket', lazy=True, cascade='all, delete-orphan')
+    logs        = db.relationship('TicketLog', backref='ticket', lazy=True, cascade='all, delete-orphan', foreign_keys='TicketLog.ticket_id')
 
     @property
     def is_overdue(self):
@@ -115,11 +116,54 @@ class Comment(db.Model):
     ticket_id  = db.Column(db.Integer, db.ForeignKey('ticket.id'), nullable=False)
     user_id    = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
 
+class TicketLog(db.Model):
+    id         = db.Column(db.Integer, primary_key=True)
+    ticket_id  = db.Column(db.Integer, db.ForeignKey('ticket.id'), nullable=False)
+    user_id    = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    action     = db.Column(db.String(500), nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    actor      = db.relationship('User', foreign_keys=[user_id])
+
 @login_manager.user_loader
 def load_user(user_id):
     return User.query.get(int(user_id))
 
 # ─── Email helper ──────────────────────────────────────────────────────────────
+
+
+def add_log(ticket_id, action):
+    log = TicketLog(ticket_id=ticket_id, user_id=current_user.id, action=action)
+    db.session.add(log)
+
+def parse_mentions(body):
+    import re
+    names = re.findall(r'@(\w+)', body)
+    users = []
+    for name in names:
+        user = User.query.filter(User.name.ilike(f'%{name}%')).first()
+        if user and user not in users:
+            users.append(user)
+    return users
+
+def notify_mention(ticket, user, body):
+    send_email(
+        to      = user.email,
+        subject = f'[DeskFlow] You were mentioned in ticket #{ticket.id}',
+        body    = f'<p>Hi {user.name}, {current_user.name} mentioned you in <b>#{ticket.id} {ticket.title}</b>.</p>'
+                  f'<p><a href="https://deskflow-rmwt.onrender.com/ticket/{ticket.id}#comments">View ticket</a></p>'
+    )
+
+def send_due_reminders():
+    tomorrow = date.today() + timedelta(days=1)
+    tickets  = Ticket.query.filter(Ticket.due_date == tomorrow, Ticket.status != 'closed').all()
+    for t in tickets:
+        if t.assignee:
+            send_email(
+                to      = t.assignee.email,
+                subject = f'[DeskFlow] Due tomorrow: #{t.id} {t.title}',
+                body    = f'<p>Hi {t.assignee.name}, ticket <b>#{t.id} {t.title}</b> is due tomorrow.</p>'
+                          f'<p><a href="https://deskflow-rmwt.onrender.com/ticket/{t.id}">View ticket</a></p>'
+            )
 
 def send_email(to, subject, body):
     if not MAIL_USER or not MAIL_PASS:
@@ -232,6 +276,14 @@ def dashboard():
 
     if current_user.is_admin:
         query = Ticket.query
+    elif current_user.team_id:
+        team_user_ids = [u.id for u in User.query.filter_by(team_id=current_user.team_id).all()]
+        query = Ticket.query.filter(
+            (Ticket.user_id == current_user.id) |
+            (Ticket.assigned_to == current_user.id) |
+            (Ticket.spocs.any(User.id == current_user.id)) |
+            (Ticket.assigned_to.in_(team_user_ids))
+        )
     else:
         query = Ticket.query.filter(
             (Ticket.user_id == current_user.id) |
@@ -359,6 +411,12 @@ def update_ticket(ticket_id):
     ticket.due_date    = datetime.strptime(due,   '%Y-%m-%d').date() if due   else None
     ticket.spocs       = [User.query.get(int(i)) for i in spoc_ids if i]
     ticket.updated_at  = datetime.utcnow()
+    changes = []
+    if old_status != ticket.status: changes.append(f'Status: {old_status} → {ticket.status}')
+    if old_assign != ticket.assigned_to:
+        new_name = User.query.get(ticket.assigned_to).name if ticket.assigned_to else 'Unassigned'
+        changes.append(f'Assigned to: {new_name}')
+    if changes: add_log(ticket.id, ' | '.join(changes))
     db.session.commit()
     if old_status != ticket.status:
         notify_status_change(ticket, old_status)
@@ -375,7 +433,13 @@ def add_comment(ticket_id):
     if body:
         comment = Comment(body=body, ticket_id=ticket_id, user_id=current_user.id)
         db.session.add(comment)
+        add_log(ticket_id, f'Comment added')
         db.session.commit()
+        mentioned = parse_mentions(body)
+        ticket = Ticket.query.get(ticket_id)
+        for u in mentioned:
+            if u.id != current_user.id:
+                notify_mention(ticket, u, body)
     return redirect(url_for('view_ticket', ticket_id=ticket_id) + '#comments')
 
 # ─── Timeline ──────────────────────────────────────────────────────────────────
@@ -397,8 +461,11 @@ def timeline():
 def quick_status(ticket_id):
     ticket     = Ticket.query.get_or_404(ticket_id)
     old_status = ticket.status
-    ticket.status     = request.form.get('status', ticket.status)
+    new_status = request.form.get('status', ticket.status)
+    ticket.status     = new_status
     ticket.updated_at = datetime.utcnow()
+    if old_status != ticket.status:
+        add_log(ticket.id, f'Status: {old_status} → {ticket.status}')
     db.session.commit()
     if old_status != ticket.status:
         notify_status_change(ticket, old_status)
@@ -588,6 +655,16 @@ def delete_ticket(ticket_id):
     flash('Ticket deleted.', 'success')
     return redirect(url_for('dashboard'))
 
+
+@app.route('/admin/send_reminders', methods=['POST'])
+@login_required
+def trigger_reminders():
+    if not current_user.is_admin:
+        flash('Admin only.', 'error')
+        return redirect(url_for('dashboard'))
+    send_due_reminders()
+    flash('Due date reminders sent!', 'success')
+    return redirect(url_for('admin_panel'))
 # ─── Admin Panel ───────────────────────────────────────────────────────────────
 
 @app.route('/admin')
